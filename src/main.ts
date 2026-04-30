@@ -38,8 +38,8 @@ async function bootstrap() {
     .build();
   
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  // Serve Swagger at root
-  SwaggerModule.setup('/', app, document, {
+  // Serve Swagger at /docs for better asset resolution
+  SwaggerModule.setup('docs', app, document, {
     customSiteTitle: 'Upsolve.it - Protocol Docs',
   });
 
