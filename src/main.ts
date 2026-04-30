@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -26,6 +27,20 @@ async function bootstrap() {
     credentials: true,
   });
   app.setGlobalPrefix('api');
+
+  // Swagger Configuration
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Upsolve.it - Intelligence Engine')
+    .setDescription('The scalable intelligence engine powering the Upsolve.it tactical platform.')
+    .setVersion('2.0')
+    .addTag('Intelligence')
+    .addBearerAuth()
+    .build();
+  
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, document, {
+    customSiteTitle: 'Upsolve.it - Protocol Docs',
+  });
 
   await app.listen(port);
 }
