@@ -15,9 +15,8 @@
 ### 🛰️ Key Modules
 
 #### 📖 API Documentation (Swagger)
-The full API specification is available via Swagger. When the backend is running, you can access the interactive documentation at:
-- **Root**: `https://api.hnuicpc.tech/` (Automatic Redirect)
-- **Direct**: `https://api.hnuicpc.tech/api/docs`
+The full API specification is available via Swagger. When the backend is running, you can access the interactive documentation directly at:
+- **Direct**: `https://api.hnuicpc.tech/` (Root access)
 
 ### 1. Contact & Signal Support
 Handles incoming support signals, generates premium HTML email templates, and routes transmissions to the HNU ICPC intelligence center.

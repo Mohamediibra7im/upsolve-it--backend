@@ -38,7 +38,8 @@ async function bootstrap() {
     .build();
   
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document, {
+  // Serve Swagger at root
+  SwaggerModule.setup('/', app, document, {
     customSiteTitle: 'Upsolve.it - Protocol Docs',
   });
 
