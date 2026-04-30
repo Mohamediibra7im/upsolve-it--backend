@@ -73,9 +73,14 @@ export class AuthController {
     @Req() req: RequestWithCookies,
     @Res({ passthrough: true }) res: Response,
   ) {
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
     const refreshToken = req.cookies?.refreshToken;
     if (refreshToken) await this.auth.logout(refreshToken);
-    res.clearCookie('refreshToken', { path: '/' });
+    res.clearCookie('refreshToken', { 
+      path: '/',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax'
+    });
     return { ok: true };
   }
 
@@ -117,7 +122,7 @@ export class AuthController {
     res.cookie('refreshToken', refreshTokenValue, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
       path: '/',
     });
