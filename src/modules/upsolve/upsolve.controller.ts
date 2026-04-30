@@ -7,6 +7,7 @@ import {
   Post,
   Put,
   Body,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { UpsolveService } from './upsolve.service';
 
@@ -17,7 +18,7 @@ export class UpsolveController {
   @Get()
   async list(@Headers('authorization') authorization: string | undefined) {
     const user = await this.upsolve.getUserFromAuthHeader(authorization);
-    if (!user) throw new BadRequestException('Unauthorized');
+    if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.upsolve.list(String(user._id));
   }
 
@@ -27,7 +28,7 @@ export class UpsolveController {
     @Body() problems: any[],
   ) {
     const user = await this.upsolve.getUserFromAuthHeader(authorization);
-    if (!user) throw new BadRequestException('Unauthorized');
+    if (!user) throw new UnauthorizedException('Unauthorized');
     try {
       await this.upsolve.insertMany(String(user._id), problems);
       return { message: 'Upsolved problems added' };
@@ -52,7 +53,7 @@ export class UpsolveController {
     @Body() problems: any[],
   ) {
     const user = await this.upsolve.getUserFromAuthHeader(authorization);
-    if (!user) throw new BadRequestException('Unauthorized');
+    if (!user) throw new UnauthorizedException('Unauthorized');
     if (!Array.isArray(problems) || problems.length === 0) {
       throw new BadRequestException('Invalid request body');
     }
@@ -66,7 +67,7 @@ export class UpsolveController {
     @Body() body: { contestId?: number; index?: string },
   ) {
     const user = await this.upsolve.getUserFromAuthHeader(authorization);
-    if (!user) throw new BadRequestException('Unauthorized');
+    if (!user) throw new UnauthorizedException('Unauthorized');
     if (!body?.contestId || !body?.index) {
       throw new BadRequestException('Missing contestId or index');
     }

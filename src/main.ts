@@ -22,8 +22,20 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  const allowedOrigins = [
+    frontendOrigin,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000'
+  ].filter(Boolean);
+
   app.enableCors({
-    origin: frontendOrigin,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.some(o => origin.startsWith(o))) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   });
   app.setGlobalPrefix('api', { exclude: ['/'] });

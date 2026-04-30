@@ -1,10 +1,10 @@
 import {
-  BadRequestException,
   Controller,
   Get,
   Headers,
   Post,
   Body,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { TrainingsService } from './trainings.service';
 
@@ -18,7 +18,7 @@ export class TrainingsController {
     @Body() body: any,
   ) {
     const user = await this.trainings.getUserFromAuthHeader(authorization);
-    if (!user) throw new BadRequestException('Unauthorized');
+    if (!user) throw new UnauthorizedException('Unauthorized');
     const training = await this.trainings.createTraining(
       String(user._id),
       body,
@@ -29,7 +29,7 @@ export class TrainingsController {
   @Get()
   async list(@Headers('authorization') authorization: string | undefined) {
     const user = await this.trainings.getUserFromAuthHeader(authorization);
-    if (!user) throw new BadRequestException('Unauthorized');
+    if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.trainings.listTrainings(String(user._id));
   }
 }

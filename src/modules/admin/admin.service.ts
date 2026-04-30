@@ -2,9 +2,10 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import { AuthService } from '../auth/auth.service';
 import { User, type UserDocument } from '../auth/schemas/user.schema';
 import {
@@ -33,7 +34,7 @@ export class AdminService {
   async requireAdmin(authHeader?: string) {
     const token = authHeader?.replace('Bearer ', '') ?? '';
     const decoded = token ? await this.auth.verifyAccessToken(token) : null;
-    if (!decoded) throw new ForbiddenException('Unauthorized');
+    if (!decoded) throw new UnauthorizedException('Unauthorized');
     const currentUser = await this.userModel.findById(decoded.userId);
     if (currentUser?.role !== 'admin') {
       throw new ForbiddenException('Admin access required');
@@ -42,18 +43,16 @@ export class AdminService {
   }
 
   async stats() {
-    const [userStats] = await Promise.all([
-      this.userModel.aggregate([
-        {
-          $group: {
-            _id: null,
-            totalUsers: { $sum: 1 },
-            adminUsers: {
-              $sum: { $cond: [{ $eq: ['$role', 'admin'] }, 1, 0] },
-            },
+    const userStats = await this.userModel.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalUsers: { $sum: 1 },
+          adminUsers: {
+            $sum: { $cond: [{ $eq: ['$role', 'admin'] }, 1, 0] },
           },
         },
-      ]),
+      },
     ]);
 
     return {
