@@ -26,7 +26,7 @@ async function bootstrap() {
     origin: frontendOrigin,
     credentials: true,
   });
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', { exclude: ['/'] });
 
   // Swagger Configuration
   const swaggerConfig = new DocumentBuilder()
