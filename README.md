@@ -1,4 +1,4 @@
-# [ UPSOLVE.it ] — Intelligence Engine
+# [ UPSOLVE.it ] | Intelligence Engine
 
 > **Backend Protocol: NEXUS-CORE**
 > The scalable intelligence engine powering the Upsolve.it tactical platform.
@@ -15,24 +15,31 @@
 ### 🛰️ Key Modules
 
 #### 📖 API Documentation (Swagger)
+
 The full API specification is available via Swagger. When the backend is running, you can access the interactive documentation directly at:
+
 - **Direct**: `https://api.hnuicpc.tech/` (Root access)
 
 ### 1. Contact & Signal Support
+
 Handles incoming support signals, generates premium HTML email templates, and routes transmissions to the HNU ICPC intelligence center.
+
 - **Endpoints**: `POST /api/contact`
 - **Logic**: Automated user receipts and admin notifications with dynamic headers.
 
 ### 2. Audit Logging
+
 Real-time tracking of administrative actions and system anomalies for high-fidelity security monitoring.
 
 ### 3. Notification Engine
+
 Tactical broadcast system for community announcements and maintenance alerts.
 
 ## 🚀 Deployment Protocol
 
 1. **Environment Setup**:
    Create `.env`:
+
    ```env
    PORT=5000
    MONGODB_URI=your_mongodb_uri
@@ -51,6 +58,7 @@ Tactical broadcast system for community announcements and maintenance alerts.
 ## 📂 API Structure
 
 All routes are prefixed with `/api` as per global configuration.
+
 - `/api/auth`: Identity management
 - `/api/contact`: Signal Support processing
 - `/api/notifications`: Community broadcasts

@@ -8,10 +8,12 @@ import {
   UpsolvedProblem,
   UpsolvedProblemSchema,
 } from './schemas/upsolved-problem.schema';
+import { UserStatsModule } from '../user-stats/user-stats.module';
 
 @Module({
   imports: [
     AuthModule,
+    UserStatsModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: UpsolvedProblem.name, schema: UpsolvedProblemSchema },
@@ -19,5 +21,6 @@ import {
   ],
   controllers: [UpsolveController],
   providers: [UpsolveService],
+  exports: [UpsolveService],
 })
 export class UpsolveModule {}

@@ -9,6 +9,8 @@ import { UpsolveModule } from './modules/upsolve/upsolve.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { ContactModule } from './modules/contact/contact.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
+import { TrainingLevelsModule } from './modules/training-levels/training-levels.module';
+import { FriendsModule } from './modules/friends/friends.module';
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
     AdminModule,
     ContactModule,
     AuditLogsModule,
+    TrainingLevelsModule,
+    FriendsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
