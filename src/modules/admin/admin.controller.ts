@@ -5,13 +5,20 @@ import {
   Headers,
   Param,
   Patch,
+  Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { TrainingLevelsService } from '../training-levels/training-levels.service';
+import { ReplaceLevelsBodyDto } from '../training-levels/dto/replace-levels.dto';
 
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly trainingLevels: TrainingLevelsService,
+  ) {}
 
   @Get('stats')
   async stats(@Headers('authorization') authorization?: string) {
@@ -45,6 +52,30 @@ export class AdminController {
   ) {
     await this.admin.requireAdmin(authorization);
     return await this.admin.userStats(userId);
+  }
+
+  @Put('levels')
+  async replaceTrainingLevels(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: ReplaceLevelsBodyDto,
+  ) {
+    const current = await this.admin.requireAdmin(authorization);
+    return await this.trainingLevels.replaceAll(body.levels, {
+      adminId: String(current._id),
+      adminHandle: current.codeforcesHandle ?? 'admin',
+    });
+  }
+
+  /** Replace DB contents with built-in default levels (110 rows, same as cold-start seed). */
+  @Post('levels/reseed')
+  async reseedTrainingLevels(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    const current = await this.admin.requireAdmin(authorization);
+    return await this.trainingLevels.reseedFromSeedFile({
+      adminId: String(current._id),
+      adminHandle: current.codeforcesHandle ?? 'admin',
+    });
   }
 
   @Get('logs')

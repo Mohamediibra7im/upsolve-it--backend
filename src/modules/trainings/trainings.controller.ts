@@ -1,9 +1,11 @@
 import {
   Controller,
+  Delete,
   Get,
   Headers,
   Post,
   Body,
+  Param,
   UnauthorizedException,
 } from '@nestjs/common';
 import { TrainingsService } from './trainings.service';
@@ -31,5 +33,15 @@ export class TrainingsController {
     const user = await this.trainings.getUserFromAuthHeader(authorization);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.trainings.listTrainings(String(user._id));
+  }
+
+  @Delete(':id')
+  async remove(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('id') id: string,
+  ) {
+    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    if (!user) throw new UnauthorizedException('Unauthorized');
+    return await this.trainings.deleteTraining(String(user._id), id);
   }
 }

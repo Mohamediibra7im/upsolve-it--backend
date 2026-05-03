@@ -10,11 +10,13 @@ import {
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { TrainingLevelsModule } from '../training-levels/training-levels.module';
 
 @Module({
   imports: [
     AuthModule,
     AuditLogsModule,
+    TrainingLevelsModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Training.name, schema: TrainingSchema },
@@ -23,5 +25,6 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
   ],
   controllers: [AdminController],
   providers: [AdminService],
+  exports: [AdminService],
 })
 export class AdminModule {}

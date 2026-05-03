@@ -10,10 +10,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { UpsolveService } from './upsolve.service';
+import { UserStatsService } from '../user-stats/user-stats.service';
 
 @Controller('upsolve')
 export class UpsolveController {
-  constructor(private readonly upsolve: UpsolveService) {}
+  constructor(
+    private readonly upsolve: UpsolveService,
+    private readonly userStats: UserStatsService,
+  ) {}
 
   @Get()
   async list(@Headers('authorization') authorization: string | undefined) {
@@ -58,6 +62,9 @@ export class UpsolveController {
       throw new BadRequestException('Invalid request body');
     }
     await this.upsolve.bulkUpdateSolvedTime(String(user._id), problems);
+    if (problems.some((p: { solvedTime?: number | null }) => p.solvedTime)) {
+      await this.userStats.recordUpsolveSolved(String(user._id));
+    }
     return { message: 'Upsolved problems updated' };
   }
 

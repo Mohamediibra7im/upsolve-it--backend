@@ -5,19 +5,20 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { AuthService } from '../auth/auth.service';
 import { User, type UserDocument } from '../auth/schemas/user.schema';
 import {
   Training,
   type TrainingDocument,
-  type TrainingProblem,
+  type TrainingProblemStored,
 } from '../trainings/schemas/training.schema';
 import {
   UpsolvedProblem,
   type UpsolvedProblemDocument,
 } from '../upsolve/schemas/upsolved-problem.schema';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { averageEffectiveProblemRatingForSession } from '../trainings/utils/session-performance';
 
 @Injectable()
 export class AdminService {
@@ -106,13 +107,19 @@ export class AdminService {
   }
 
   async userStats(userId: string) {
-    const user = await this.userModel.findById(userId);
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new NotFoundException('User not found');
+    }
+    const uid = new Types.ObjectId(userId);
+
+    const user = await this.userModel.findById(uid);
     if (!user) throw new NotFoundException('User not found');
 
+    /** Match ObjectId field exactly — same as TrainingsService.listTrainings */
     const trainings = await this.trainingModel
-      .find({ user: userId })
+      .find({ user: uid })
       .sort({ startTime: -1 });
-    const upsolvedProblems = await this.upsolveModel.find({ user: userId });
+    const upsolvedProblems = await this.upsolveModel.find({ user: uid });
 
     const totalSessions = trainings.length;
     const totalProblems = trainings.reduce(
@@ -123,8 +130,9 @@ export class AdminService {
       (acc, session) =>
         acc +
         session.problems.filter(
-          (p: TrainingProblem) =>
-            p.solvedTime !== null && p.solvedTime !== undefined,
+          (p: TrainingProblemStored) =>
+            p.isSolved ||
+            (p.solvedTime !== null && p.solvedTime !== undefined),
         ).length,
       0,
     );
@@ -156,20 +164,21 @@ export class AdminService {
         ? Math.round((solvedProblems / totalProblems) * 100)
         : 0;
 
-    const averageRating =
+    const averageRatingRaw =
       totalSessions > 0
-        ? Math.round(
-            trainings.reduce((acc, session) => {
-              const sessionRatings = Object.values(session.customRatings);
-              const sessionAvg =
-                sessionRatings.length > 0
-                  ? sessionRatings.reduce((sum, rating) => sum + rating, 0) /
-                    sessionRatings.length
-                  : 0;
-              return acc + sessionAvg;
-            }, 0) / totalSessions,
-          )
+        ? trainings.reduce(
+            (acc, session) =>
+              acc +
+              averageEffectiveProblemRatingForSession(
+                session.customRatings,
+                session.problems as TrainingProblemStored[],
+              ),
+            0,
+          ) / totalSessions
         : 0;
+    const averageRating = Number.isFinite(averageRatingRaw)
+      ? Math.round(averageRatingRaw)
+      : 0;
 
     const recentTrend =
       totalSessions >= 2
@@ -210,8 +219,9 @@ export class AdminService {
         performance: t.performance,
         problemsCount: t.problems.length,
         solvedCount: t.problems.filter(
-          (p: TrainingProblem) =>
-            p.solvedTime !== null && p.solvedTime !== undefined,
+          (p: TrainingProblemStored) =>
+            p.isSolved ||
+            (p.solvedTime !== null && p.solvedTime !== undefined),
         ).length,
       })),
     };
