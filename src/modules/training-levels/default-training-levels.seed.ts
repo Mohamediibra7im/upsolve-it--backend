@@ -1,6 +1,7 @@
 /**
- * Canonical 110 training levels (no external JSON). Target rating is linear 900–4050;
- * session time steps up with level. P1–P4 are derived on the client from performance.
+ * Canonical 110 training levels (no external JSON). Target ratings interpolate 900→4050
+ * then snap to 100-point steps (aligned with admin + ladder UI). Time steps up with level.
+ * P1–P4 are derived on the client from performance.
  */
 export type TrainingLevelSeedDoc = {
   seqId: number;
@@ -18,11 +19,17 @@ function timeForLevelId(id: number): string {
   return '120';
 }
 
-/** 110 rows: ids 1..110, performance 900..4050 (inclusive endpoints, linear). */
+const TARGET_BAND = 100;
+
+/** 110 rows: ids 1..110, performance ~900..4050 on 100-point grid. */
 export function getDefaultTrainingLevelDocs(): TrainingLevelSeedDoc[] {
   const out: TrainingLevelSeedDoc[] = [];
   for (let id = 1; id <= 110; id++) {
-    const performance = Math.round(900 + (4050 - 900) * (id - 1) / 109);
+    const linear = Math.round(900 + (4050 - 900) * (id - 1) / 109);
+    const performance = Math.max(
+      800,
+      Math.min(4050, Math.round(linear / TARGET_BAND) * TARGET_BAND),
+    );
     out.push({
       seqId: id,
       levelLabel: String(id),

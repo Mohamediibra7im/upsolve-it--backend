@@ -26,7 +26,8 @@ export class LevelRowDto {
   )
   @IsNumber()
   @Min(800)
-  @Max(4000)
+  /** Canonical seed tops out at 4050; allow headroom for extra rows beyond level 110. */
+  @Max(4100)
   Performance!: number;
 }
 
