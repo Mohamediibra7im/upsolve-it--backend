@@ -26,6 +26,20 @@ export class UpsolveController {
     return await this.upsolve.list(String(user._id));
   }
 
+  /**
+   * Returns problem identifiers that the user has deliberately deleted
+   * from the upsolve list. The frontend uses this to prevent the
+   * auto-sync logic from re-inserting deleted problems.
+   */
+  @Get('dismissed')
+  async listDismissed(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    const user = await this.upsolve.getUserFromAuthHeader(authorization);
+    if (!user) throw new UnauthorizedException('Unauthorized');
+    return await this.upsolve.listDismissed(String(user._id));
+  }
+
   @Post()
   async add(
     @Headers('authorization') authorization: string | undefined,

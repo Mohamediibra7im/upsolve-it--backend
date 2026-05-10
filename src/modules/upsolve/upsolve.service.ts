@@ -7,6 +7,10 @@ import {
   UpsolvedProblem,
   type UpsolvedProblemDocument,
 } from './schemas/upsolved-problem.schema';
+import {
+  DismissedUpsolve,
+  type DismissedUpsolveDocument,
+} from './schemas/dismissed-upsolve.schema';
 
 @Injectable()
 export class UpsolveService {
@@ -15,6 +19,8 @@ export class UpsolveService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(UpsolvedProblem.name)
     private readonly upsolveModel: Model<UpsolvedProblemDocument>,
+    @InjectModel(DismissedUpsolve.name)
+    private readonly dismissedModel: Model<DismissedUpsolveDocument>,
   ) {}
 
   async getUserFromAuthHeader(authHeader?: string) {
@@ -29,6 +35,18 @@ export class UpsolveService {
     return await this.upsolveModel
       .find({ user: userId })
       .sort({ createdAt: 1, _id: 1 });
+  }
+
+  /**
+   * Returns all dismissed problem identifiers for a user.
+   * The frontend uses this to prevent re-syncing deleted problems
+   * from training history.
+   */
+  async listDismissed(userId: string) {
+    return await this.dismissedModel
+      .find({ user: userId })
+      .select('contestId index -_id')
+      .lean();
   }
 
   async insertMany(userId: string, problems: any[]) {
@@ -50,7 +68,30 @@ export class UpsolveService {
     await this.upsolveModel.bulkWrite(bulkOps);
   }
 
+  /**
+   * Deletes a problem from the user's upsolve list AND records it
+   * as dismissed so the auto-sync logic won't re-add it from
+   * training history.
+   */
   async deleteOne(userId: string, contestId: number, index: string) {
-    await this.upsolveModel.deleteOne({ user: userId, contestId, index });
+    // 1. Remove the problem from the active upsolve list
+    const deleteResult = await this.upsolveModel.deleteOne({
+      user: userId,
+      contestId,
+      index,
+    });
+
+    // 2. Record the dismissal to prevent re-sync from history.
+    //    Use upsert to avoid duplicate-key errors if the user
+    //    somehow dismisses the same problem twice.
+    if (deleteResult.deletedCount > 0) {
+      await this.dismissedModel.updateOne(
+        { user: userId, contestId, index },
+        { $setOnInsert: { user: userId, contestId, index, dismissedAt: new Date() } },
+        { upsert: true },
+      );
+    }
+
+    return deleteResult;
   }
 }

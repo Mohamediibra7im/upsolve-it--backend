@@ -20,4 +20,6 @@ export class TrainingLevel {
 
 export type TrainingLevelDocument = HydratedDocument<TrainingLevel>;
 export const TrainingLevelSchema = SchemaFactory.createForClass(TrainingLevel);
-TrainingLevelSchema.index({ seqId: 1 });
+// Note: seqId index is already created by the `unique: true` property decorator.
+// A manual `.index({ seqId: 1 })` call was removed to fix a duplicate-index warning.
+
