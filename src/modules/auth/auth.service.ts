@@ -129,7 +129,14 @@ export class AuthService {
     password: string,
     confirmPassword: string,
   ) {
-    const existing = await this.userModel.findOne({ codeforcesHandle });
+    const existing = await this.userModel.findOne({
+      codeforcesHandle: {
+        $regex: new RegExp(
+          `^${codeforcesHandle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+          'i',
+        ),
+      },
+    });
     if (existing) throw new BadRequestException('Handle already exists');
 
     if (!codeforcesHandle || !password || !confirmPassword) {
@@ -154,21 +161,22 @@ export class AuthService {
       throw new BadRequestException('Invalid Codeforces handle');
     }
     const cfUser = data.result[0];
-    const rating = cfUser.rating ?? 0;
+    const rating: number = Number(cfUser.rating) || 0;
     const rank = cfUser.rank ?? getRankFromRating(rating);
 
     const hashed = await bcrypt.hash(password, 10);
 
+    const maxRating: number = Number(cfUser.maxRating) || 0;
     const user = await this.userModel.create({
       codeforcesHandle,
       password: hashed,
       rating,
       avatar: cfUser.avatar ?? 'https://userpic.codeforces.org/no-avatar.jpg',
       rank,
-      maxRating: cfUser.maxRating ?? 0,
+      maxRating,
       maxRank:
         cfUser.maxRank ??
-        (cfUser.maxRating ? getRankFromRating(cfUser.maxRating) : 'Unrated'),
+        (maxRating > 0 ? getRankFromRating(maxRating) : 'Unrated'),
       organization: cfUser.organization,
       lastSyncTime: Date.now(),
     });
@@ -231,7 +239,8 @@ export class AuthService {
 
     const decoded = await this.jwt.verifyAsync(verificationToken);
 
-    const { handle, iat } = decoded;
+    const handle = String(decoded.handle ?? '');
+    const iat = Number(decoded.iat ?? 0);
     const submissionsUrl = `https://codeforces.com/api/user.status?handle=${encodeURIComponent(
       handle,
     )}&from=1&count=10`;
@@ -367,11 +376,11 @@ export class AuthService {
     }
     const cfUser = data.result[0];
 
-    const currentRating = cfUser.rating ?? 0;
+    const currentRating: number = Number(cfUser.rating) || 0;
     const currentRank =
       cfUser.rank ??
       (currentRating === 0 ? 'Unrated' : getRankFromRating(currentRating));
-    const maxRating = cfUser.maxRating ?? 0;
+    const maxRating: number = Number(cfUser.maxRating) || 0;
     const maxRank =
       cfUser.maxRank ??
       (maxRating === 0 ? 'Unrated' : getRankFromRating(maxRating));

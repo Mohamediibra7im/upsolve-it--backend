@@ -5,7 +5,7 @@ export type UserDocument = HydratedDocument<User>;
 
 @Schema({ timestamps: true })
 export class User {
-  @Prop({ required: true, unique: true, index: true })
+  @Prop({ required: true, unique: true })
   codeforcesHandle!: string;
 
   @Prop({ required: true })
@@ -37,3 +37,9 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+
+// Enforce case-insensitive uniqueness on codeforcesHandle
+UserSchema.index(
+  { codeforcesHandle: 1 },
+  { unique: true, collation: { locale: 'en', strength: 2 } },
+);
