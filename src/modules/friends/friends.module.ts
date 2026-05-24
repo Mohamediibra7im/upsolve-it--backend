@@ -7,7 +7,10 @@ import { User, UserSchema } from '../auth/schemas/user.schema';
 import { TrainingsModule } from '../trainings/trainings.module';
 import { FriendsController } from './friends.controller';
 import { FriendsService } from './friends.service';
-import { FriendRequest, FriendRequestSchema } from './schemas/friend-request.schema';
+import {
+  FriendRequest,
+  FriendRequestSchema,
+} from './schemas/friend-request.schema';
 import { Friendship, FriendshipSchema } from './schemas/friendship.schema';
 
 @Module({

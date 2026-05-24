@@ -3,7 +3,10 @@ import { isProblemMarkedSolved } from './problem-solved';
 
 const RATING_KEYS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'] as const;
 
-function getExpectedSolveProb(userRating: number, problemRating: number): number {
+function getExpectedSolveProb(
+  userRating: number,
+  problemRating: number,
+): number {
   const ratingDiff = problemRating - userRating;
   return 1 / (1 + Math.pow(10, ratingDiff / 400));
 }
@@ -49,7 +52,7 @@ function problemRatingAt(
 ): number {
   if (p.rating != null && p.rating > 0) return p.rating;
   const k = RATING_KEYS[index];
-  if (k && customRatings && customRatings[k] != null) return customRatings[k]!;
+  if (k && customRatings && customRatings[k] != null) return customRatings[k];
   return 1500;
 }
 
@@ -60,7 +63,6 @@ function isSolved(p: TrainingProblemStored): boolean {
 function solveTimeMinutes(
   p: TrainingProblemStored,
   startTime: number,
-  endTime: number,
 ): number | null {
   if (!isSolved(p)) return null;
   const t = p.solvedAt ?? p.solvedTime;
@@ -90,16 +92,11 @@ export function computeSessionPerformance(
     const p = problems[i];
     const rating = problemRatingAt(p, i, input.customRatings);
     const solved = isSolved(p);
-    const st = solveTimeMinutes(p, input.startTime, input.endTime);
+    const st = solveTimeMinutes(p, input.startTime);
     const expectedProb = getExpectedSolveProb(userRating, rating);
     const timeFactor =
       solved && st != null ? getTimeFactor(st, contestDuration) : 1;
-    total += solvePerformanceToRating(
-      rating,
-      expectedProb,
-      solved,
-      timeFactor,
-    );
+    total += solvePerformanceToRating(rating, expectedProb, solved, timeFactor);
     count++;
   }
 

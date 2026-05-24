@@ -1,7 +1,10 @@
 import { Injectable, OnModuleInit, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { TrainingLevel, TrainingLevelDocument } from './schemas/training-level.schema';
+import {
+  TrainingLevel,
+  TrainingLevelDocument,
+} from './schemas/training-level.schema';
 import { LevelRowDto } from './dto/replace-levels.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { getDefaultTrainingLevelDocs } from './default-training-levels.seed';
@@ -63,7 +66,9 @@ export class TrainingLevelsService implements OnModuleInit {
     return { count: ok.length };
   }
 
-  private toClientRow(d: TrainingLevelDocument | Record<string, unknown>): ClientLevelRow {
+  private toClientRow(
+    d: TrainingLevelDocument | Record<string, unknown>,
+  ): ClientLevelRow {
     const doc = d as {
       seqId: number;
       levelLabel: string;
@@ -84,9 +89,7 @@ export class TrainingLevelsService implements OnModuleInit {
       .sort({ seqId: 1 })
       .lean()
       .exec();
-    return rows.map((r) =>
-      this.toClientRow(r as unknown as TrainingLevelDocument),
-    );
+    return rows.map((r) => this.toClientRow(r));
   }
 
   async replaceAll(

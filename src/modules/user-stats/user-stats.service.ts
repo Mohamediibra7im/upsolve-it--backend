@@ -5,7 +5,10 @@ import {
   UserStats,
   type UserStatsDocument,
 } from '../trainings/schemas/user-stats.schema';
-import { Training, type TrainingDocument } from '../trainings/schemas/training.schema';
+import {
+  Training,
+  type TrainingDocument,
+} from '../trainings/schemas/training.schema';
 import {
   UpsolvedProblem,
   type UpsolvedProblemDocument,
@@ -75,10 +78,7 @@ export class UserStatsService {
     doc.activeDays = Array.from(set).sort().slice(-60);
   }
 
-  private async recomputeConsistency(
-    userId: string,
-    doc: UserStatsDocument,
-  ) {
+  private async recomputeConsistency(userId: string, doc: UserStatsDocument) {
     const now = Date.now();
     const dayMs = 86_400_000;
     const startWindow = now - 7 * dayMs;
@@ -87,10 +87,7 @@ export class UserStatsService {
     const trainings = await this.trainingModel
       .find({
         user: new Types.ObjectId(userId),
-        $or: [
-          { status: 'completed' },
-          { status: { $exists: false } },
-        ],
+        $or: [{ status: 'completed' }, { status: { $exists: false } }],
         endTime: { $gte: startWindow },
       })
       .select('endTime')

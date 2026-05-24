@@ -36,12 +36,16 @@ export class AuditLogsService {
 
   async listLogs(limit = 100, offset = 0, filters: any = {}) {
     const query: any = {};
-    
+
     if (filters.action) query.action = filters.action;
     if (filters.entity) query.entity = filters.entity;
-    if (filters.performedBy) query.performedBy = new Types.ObjectId(filters.performedBy);
+    if (filters.performedBy)
+      query.performedBy = new Types.ObjectId(filters.performedBy);
     if (filters.performedByHandle) {
-      query.performedByHandle = { $regex: filters.performedByHandle, $options: 'i' };
+      query.performedByHandle = {
+        $regex: filters.performedByHandle,
+        $options: 'i',
+      };
     }
 
     const [logs, total] = await Promise.all([

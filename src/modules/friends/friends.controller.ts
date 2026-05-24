@@ -39,7 +39,10 @@ export class FriendsController {
   ) {
     const user = await this.trainings.getUserFromAuthHeader(authorization);
     if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.friends.sendRequest(String(user._id), body.codeforcesHandle);
+    return await this.friends.sendRequest(
+      String(user._id),
+      body.codeforcesHandle,
+    );
   }
 
   @Post('requests/:requestId/accept')
@@ -69,7 +72,10 @@ export class FriendsController {
   ) {
     const user = await this.trainings.getUserFromAuthHeader(authorization);
     if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.friends.cancelOutgoingRequest(String(user._id), requestId);
+    return await this.friends.cancelOutgoingRequest(
+      String(user._id),
+      requestId,
+    );
   }
 
   @Get()

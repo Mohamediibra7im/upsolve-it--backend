@@ -37,13 +37,14 @@ export class TrainingsService {
   }
 
   async createTraining(userId: string, body: Record<string, any>) {
-    const { _id: _stripId, user: _stripUser, ...rest } = body;
-    const problems = ensureProblemIds(rest.problems);
+    const rest = { ...body };
+    delete rest._id;
+    delete rest.user;
+    const problems = ensureProblemIds(rest.problems as unknown[]);
     const solvedCount =
       rest.solvedCount ??
-      problems.filter((p) =>
-        isProblemMarkedSolved(p as TrainingProblemStored),
-      ).length;
+      problems.filter((p) => isProblemMarkedSolved(p as TrainingProblemStored))
+        .length;
 
     const durationMinutes =
       rest.durationMinutes ??

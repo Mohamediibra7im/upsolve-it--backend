@@ -5,7 +5,7 @@ export type AuditLogDocument = AuditLog & Document;
 
 @Schema({
   timestamps: { createdAt: true, updatedAt: false },
-  collection: 'audit_logs'
+  collection: 'audit_logs',
 })
 export class AuditLog {
   @Prop({ required: true, index: true })
@@ -14,10 +14,19 @@ export class AuditLog {
   @Prop({ required: true, index: true })
   entity!: string; // e.g., 'User', 'Notification', 'Training'
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, refPath: 'entity', required: false })
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    refPath: 'entity',
+    required: false,
+  })
   entityId?: Types.ObjectId;
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true, index: true })
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true,
+  })
   performedBy!: Types.ObjectId;
 
   @Prop({ index: true })

@@ -9,7 +9,10 @@ import { Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
-import { RefreshToken, type RefreshTokenDocument } from './schemas/refresh-token.schema';
+import {
+  RefreshToken,
+  type RefreshTokenDocument,
+} from './schemas/refresh-token.schema';
 import { User, type UserDocument } from './schemas/user.schema';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 

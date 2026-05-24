@@ -78,10 +78,12 @@ export class FriendsService {
   async areFriends(userId: string, otherUserId: string): Promise<boolean> {
     if (String(userId) === String(otherUserId)) return false;
     const [lower, higher] = normalizePair(userId, otherUserId);
-    const doc = await this.friendshipModel.findOne({
-      userLower: lower,
-      userHigher: higher,
-    });
+    const doc = await this.friendshipModel
+      .findOne({
+        userLower: lower,
+        userHigher: higher,
+      })
+      .lean();
     return !!doc;
   }
 
@@ -363,9 +365,11 @@ export class FriendsService {
 
   async listFriends(currentUserId: string) {
     const uid = new Types.ObjectId(currentUserId);
-    const rows = await this.friendshipModel.find({
-      $or: [{ userLower: uid }, { userHigher: uid }],
-    });
+    const rows = await this.friendshipModel
+      .find({
+        $or: [{ userLower: uid }, { userHigher: uid }],
+      })
+      .lean();
 
     const otherIds = rows.map((r) => {
       const lo = String(r.userLower);

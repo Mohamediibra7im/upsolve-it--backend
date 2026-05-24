@@ -7,19 +7,14 @@ export function buildInsightAndRecommendation(input: {
   userRating: number;
   attempts: number;
 }): { insightMessage: string; recommendation: string } {
-  const {
-    isSolved,
-    speedStatus,
-    problemRating,
-    userRating,
-    attempts,
-  } = input;
+  const { isSolved, speedStatus, problemRating, userRating, attempts } = input;
 
   if (isSolved && speedStatus === 'fast') {
     return {
       insightMessage:
         'You solved this faster than expected. This rating may be comfortable for you.',
-      recommendation: 'Keep pushing with slightly harder problems in this range.',
+      recommendation:
+        'Keep pushing with slightly harder problems in this range.',
     };
   }
 
@@ -70,8 +65,7 @@ export function buildInsightAndRecommendation(input: {
   }
 
   return {
-    insightMessage:
-      'Keep pushing; every attempt builds pattern recognition.',
+    insightMessage: 'Keep pushing; every attempt builds pattern recognition.',
     recommendation: 'Add to upsolve and track progress on the queue.',
   };
 }

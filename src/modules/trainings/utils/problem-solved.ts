@@ -32,8 +32,7 @@ export function isProblemMarkedSolved(
 ): boolean {
   const plain = toPlainProblem(p);
   if (plain.isSolved === true) return true;
-  const t =
-    coerceMs(plain.solvedAt) ?? coerceMs(plain.solvedTime);
+  const t = coerceMs(plain.solvedAt) ?? coerceMs(plain.solvedTime);
   if (t == null) return false;
   return t > 0;
 }

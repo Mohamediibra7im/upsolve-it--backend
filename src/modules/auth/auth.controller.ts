@@ -76,10 +76,10 @@ export class AuthController {
     const isProduction = this.config.get<string>('NODE_ENV') === 'production';
     const refreshToken = req.cookies?.refreshToken;
     if (refreshToken) await this.auth.logout(refreshToken);
-    res.clearCookie('refreshToken', { 
+    res.clearCookie('refreshToken', {
       path: '/',
       secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax'
+      sameSite: isProduction ? 'none' : 'lax',
     });
     return { ok: true };
   }

@@ -42,7 +42,7 @@ export class TrainingSessionsService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly userStats: UserStatsService,
     private readonly upsolve: UpsolveService,
-  ) { }
+  ) {}
 
   async createSession(userId: string, body: Record<string, unknown>) {
     const problems = ensureProblemIds(
@@ -70,14 +70,16 @@ export class TrainingSessionsService {
     return doc;
   }
 
-  private withExpectedDefaults(p: TrainingProblemStored): TrainingProblemStored {
+  private withExpectedDefaults(
+    p: TrainingProblemStored,
+  ): TrainingProblemStored {
     const rating = p.rating ?? 0;
     const expected = expectedTimeSecondsFromRating(rating);
     return {
       ...p,
       problemId: p.problemId || makeProblemId(p.contestId, p.index),
       expectedTimeSeconds: p.expectedTimeSeconds ?? expected,
-      speedStatus: (p.speedStatus as SpeedStatus) ?? 'unsolved',
+      speedStatus: p.speedStatus ?? 'unsolved',
       attempts: p.attempts ?? 0,
       isSolved: p.isSolved ?? false,
       tags: p.tags ?? [],
@@ -125,8 +127,7 @@ export class TrainingSessionsService {
     current: TrainingProblemStored,
     incoming: Partial<TrainingProblemStored>,
   ): TrainingProblemStored {
-    const start =
-      current.startedAt ?? incoming.startedAt ?? session.startTime;
+    const start = current.startedAt ?? incoming.startedAt ?? session.startTime;
     const solvedAt =
       incoming.solvedAt ?? current.solvedAt ?? current.solvedTime;
     const isSolved = Boolean(
@@ -143,11 +144,7 @@ export class TrainingSessionsService {
     if (isSolved && solvedAt != null) {
       timeSpent = Math.max(0, Math.round((solvedAt - start) / 1000));
     }
-    const speed = computeSpeedStatus(
-      Boolean(isSolved),
-      timeSpent,
-      expected,
-    );
+    const speed = computeSpeedStatus(Boolean(isSolved), timeSpent, expected);
     return {
       ...current,
       ...incoming,
@@ -203,7 +200,7 @@ export class TrainingSessionsService {
         startTime: session.startTime,
         endTime: session.endTime,
         customRatings: session.customRatings,
-        problems: session.problems as TrainingProblemStored[],
+        problems: session.problems,
       },
       userRating,
     );
@@ -239,12 +236,9 @@ export class TrainingSessionsService {
     const start = p.startedAt ?? session.startTime;
     const solvedAt =
       p.solvedAt ?? (p.solvedTime != null ? p.solvedTime : undefined);
-    const isSolved = Boolean(
-      p.isSolved || (solvedAt != null && solvedAt > 0),
-    );
+    const isSolved = Boolean(p.isSolved || (solvedAt != null && solvedAt > 0));
     const expected =
-      p.expectedTimeSeconds ??
-      expectedTimeSecondsFromRating(p.rating ?? 0);
+      p.expectedTimeSeconds ?? expectedTimeSecondsFromRating(p.rating ?? 0);
     let timeSpent = p.timeSpentSeconds ?? null;
     if (isSolved && solvedAt != null) {
       timeSpent = Math.max(0, Math.round((solvedAt - start) / 1000));
@@ -293,8 +287,7 @@ export class TrainingSessionsService {
         attempts: p.attempts ?? 0,
         timeSpentSeconds: p.timeSpentSeconds ?? 0,
         expectedTimeSeconds:
-          p.expectedTimeSeconds ??
-          expectedTimeSecondsFromRating(p.rating ?? 0),
+          p.expectedTimeSeconds ?? expectedTimeSecondsFromRating(p.rating ?? 0),
         speedStatus: p.speedStatus ?? 'unsolved',
         insightMessage: insight.insightMessage,
         recommendation: insight.recommendation,
@@ -302,8 +295,7 @@ export class TrainingSessionsService {
     });
 
     const solved = problemReviews.filter((r) => r.solved).length;
-    const avgTime =
-      solved > 0 ? Math.round(totalTime / solved) : 0;
+    const avgTime = solved > 0 ? Math.round(totalTime / solved) : 0;
 
     return {
       sessionId: String(session._id),
@@ -327,10 +319,7 @@ export class TrainingSessionsService {
     const sessions = await this.trainingModel
       .find({
         user: new Types.ObjectId(userId),
-        $or: [
-          { status: 'completed' },
-          { status: { $exists: false } },
-        ],
+        $or: [{ status: 'completed' }, { status: { $exists: false } }],
       })
       .select('problems')
       .lean();

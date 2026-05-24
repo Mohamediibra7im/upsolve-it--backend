@@ -24,7 +24,6 @@ export function utcDaysBetweenEarlierLater(
 ): number {
   const a = toUtcDayKey(earlierMs);
   const b = toUtcDayKey(laterMs);
-  const diff =
-    (utcDayKeyToStartMs(b) - utcDayKeyToStartMs(a)) / 86_400_000;
+  const diff = (utcDayKeyToStartMs(b) - utcDayKeyToStartMs(a)) / 86_400_000;
   return Math.max(0, Math.round(diff));
 }

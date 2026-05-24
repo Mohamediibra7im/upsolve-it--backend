@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -88,7 +89,9 @@ export class AdminService {
 
     if (!updatedUser) throw new NotFoundException('User not found');
 
-    const adminHandle = (await this.userModel.findById(currentAdminId))?.codeforcesHandle || 'Unknown';
+    const adminHandle =
+      (await this.userModel.findById(currentAdminId))?.codeforcesHandle ||
+      'Unknown';
     const previousRole = role === 'admin' ? 'user' : 'admin';
 
     await this.auditLogs.logAction(
@@ -131,8 +134,7 @@ export class AdminService {
         acc +
         session.problems.filter(
           (p: TrainingProblemStored) =>
-            p.isSolved ||
-            (p.solvedTime !== null && p.solvedTime !== undefined),
+            p.isSolved || (p.solvedTime !== null && p.solvedTime !== undefined),
         ).length,
       0,
     );
@@ -171,7 +173,7 @@ export class AdminService {
               acc +
               averageEffectiveProblemRatingForSession(
                 session.customRatings,
-                session.problems as TrainingProblemStored[],
+                session.problems,
               ),
             0,
           ) / totalSessions
@@ -220,8 +222,7 @@ export class AdminService {
         problemsCount: t.problems.length,
         solvedCount: t.problems.filter(
           (p: TrainingProblemStored) =>
-            p.isSolved ||
-            (p.solvedTime !== null && p.solvedTime !== undefined),
+            p.isSolved || (p.solvedTime !== null && p.solvedTime !== undefined),
         ).length,
       })),
     };
@@ -230,4 +231,163 @@ export class AdminService {
   async listLogs(limit?: number, offset?: number, filters?: any) {
     return await this.auditLogs.listLogs(limit, offset, filters);
   }
+
+  async syncUserRating(currentAdminId: string, userId: string) {
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new NotFoundException('Invalid user ID');
+    }
+    const uid = new Types.ObjectId(userId);
+    const user = await this.userModel.findById(uid);
+    if (!user) throw new NotFoundException('User not found');
+
+    const res = await fetch(
+      `https://codeforces.com/api/user.info?handles=${encodeURIComponent(
+        user.codeforcesHandle,
+      )}`,
+    );
+    const data = await res.json();
+    if (data?.status !== 'OK' || !data.result?.[0]) {
+      throw new BadRequestException('Failed to sync rating from Codeforces');
+    }
+    const cfUser = data.result[0];
+
+    const currentRating = Number(cfUser.rating ?? 0);
+    const currentRank =
+      cfUser.rank ??
+      (currentRating === 0 ? 'Unrated' : getRankFromRating(currentRating));
+    const maxRating = Number(cfUser.maxRating ?? 0);
+    const maxRank =
+      cfUser.maxRank ??
+      (maxRating === 0 ? 'Unrated' : getRankFromRating(maxRating));
+
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(
+        uid,
+        {
+          rating: currentRating,
+          rank: currentRank,
+          maxRating,
+          maxRank,
+          organization: cfUser.organization,
+          lastSyncTime: Date.now(),
+          avatar: cfUser.avatar ?? user.avatar,
+        },
+        { returnDocument: 'after' },
+      )
+      .select('codeforcesHandle role rating rank avatar createdAt');
+
+    const admin = await this.userModel.findById(currentAdminId);
+    const adminHandle = admin?.codeforcesHandle || 'Unknown';
+
+    await this.auditLogs.logAction(
+      'SYNC_RATING',
+      'User',
+      currentAdminId,
+      adminHandle,
+      {
+        userId,
+        handle: user.codeforcesHandle,
+        rating: currentRating,
+        previousRating: user.rating,
+      },
+      userId,
+    );
+
+    return {
+      message: 'Rating synced successfully',
+      user: updatedUser,
+    };
+  }
+
+  async syncBatchUserRatings(currentAdminId: string, userIds: string[]) {
+    if (!userIds?.length) {
+      throw new BadRequestException('No user IDs provided');
+    }
+
+    // Fetch all users from DB
+    const validIds = userIds.filter((id) => Types.ObjectId.isValid(id));
+    const users = await this.userModel.find({ _id: { $in: validIds } });
+    if (!users.length) throw new NotFoundException('No valid users found');
+
+    // Build handles list and fetch from Codeforces in one call
+    const handles = users.map((u) => u.codeforcesHandle).join(';');
+    const res = await fetch(
+      `https://codeforces.com/api/user.info?handles=${encodeURIComponent(handles)}`,
+    );
+    const data = await res.json();
+    if (data?.status !== 'OK' || !data.result?.length) {
+      throw new BadRequestException('Failed to fetch ratings from Codeforces');
+    }
+
+    // Map CF results by handle (lowercase) for easy lookup
+    const cfMap = new Map<string, any>();
+    for (const cfUser of data.result) {
+      cfMap.set((cfUser.handle as string).toLowerCase(), cfUser);
+    }
+
+    const admin = await this.userModel.findById(currentAdminId);
+    const adminHandle = admin?.codeforcesHandle || 'Unknown';
+
+    let synced = 0;
+    let failed = 0;
+
+    for (const user of users) {
+      const cfUser = cfMap.get(user.codeforcesHandle.toLowerCase());
+      if (!cfUser) {
+        failed++;
+        continue;
+      }
+
+      const currentRating: number = Number(cfUser.rating) || 0;
+      const currentRank =
+        cfUser.rank ??
+        (currentRating === 0 ? 'Unrated' : getRankFromRating(currentRating));
+      const maxRating: number = Number(cfUser.maxRating) || 0;
+      const maxRank =
+        cfUser.maxRank ??
+        (maxRating === 0 ? 'Unrated' : getRankFromRating(maxRating));
+
+      await this.userModel.findByIdAndUpdate(user._id, {
+        rating: currentRating,
+        rank: currentRank,
+        maxRating,
+        maxRank,
+        organization: cfUser.organization,
+        lastSyncTime: Date.now(),
+        avatar: cfUser.avatar ?? user.avatar,
+      });
+
+      await this.auditLogs.logAction(
+        'SYNC_RATING',
+        'User',
+        currentAdminId,
+        adminHandle,
+        {
+          userId: String(user._id),
+          handle: user.codeforcesHandle,
+          rating: currentRating,
+          previousRating: user.rating,
+        },
+        String(user._id),
+      );
+
+      synced++;
+    }
+
+    return { message: `Synced ${synced} user(s)`, synced, failed };
+  }
+}
+
+function getRankFromRating(rating: number): string {
+  if (rating === 0) return 'Unrated';
+  if (rating < 1200) return 'Newbie';
+  if (rating < 1400) return 'Pupil';
+  if (rating < 1600) return 'Specialist';
+  if (rating < 1900) return 'Expert';
+  if (rating < 2100) return 'Candidate Master';
+  if (rating < 2300) return 'Master';
+  if (rating < 2400) return 'International Master';
+  if (rating < 2600) return 'Grandmaster';
+  if (rating < 3000) return 'International Grandmaster';
+  return 'Legendary Grandmaster';
 }

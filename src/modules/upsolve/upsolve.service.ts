@@ -87,7 +87,14 @@ export class UpsolveService {
     if (deleteResult.deletedCount > 0) {
       await this.dismissedModel.updateOne(
         { user: userId, contestId, index },
-        { $setOnInsert: { user: userId, contestId, index, dismissedAt: new Date() } },
+        {
+          $setOnInsert: {
+            user: userId,
+            contestId,
+            index,
+            dismissedAt: new Date(),
+          },
+        },
         { upsert: true },
       );
     }

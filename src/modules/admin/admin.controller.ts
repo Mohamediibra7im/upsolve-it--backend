@@ -54,6 +54,27 @@ export class AdminController {
     return await this.admin.userStats(userId);
   }
 
+  @Post('users/:userId/sync')
+  async syncUserRating(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('userId') userId: string,
+  ) {
+    const current = await this.admin.requireAdmin(authorization);
+    return await this.admin.syncUserRating(String(current._id), userId);
+  }
+
+  @Post('users/sync-batch')
+  async syncBatchUserRatings(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { userIds: string[] },
+  ) {
+    const current = await this.admin.requireAdmin(authorization);
+    return await this.admin.syncBatchUserRatings(
+      String(current._id),
+      body.userIds,
+    );
+  }
+
   @Put('levels')
   async replaceTrainingLevels(
     @Headers('authorization') authorization: string | undefined,

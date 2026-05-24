@@ -25,12 +25,12 @@ async function bootstrap() {
   const allowedOrigins = [
     frontendOrigin,
     'http://localhost:3000',
-    'http://127.0.0.1:3000'
+    'http://127.0.0.1:3000',
   ].filter(Boolean);
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.some(o => origin.startsWith(o))) {
+      if (!origin || allowedOrigins.some((o) => origin.startsWith(o))) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -43,12 +43,14 @@ async function bootstrap() {
   // Swagger Configuration
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Upsolve.it - Intelligence Engine')
-    .setDescription('The scalable intelligence engine powering the Upsolve.it tactical platform.')
+    .setDescription(
+      'The scalable intelligence engine powering the Upsolve.it tactical platform.',
+    )
     .setVersion('2.0')
     .addTag('Intelligence')
     .addBearerAuth()
     .build();
-  
+
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   // Serve Swagger at /docs for better asset resolution
   SwaggerModule.setup('docs', app, document, {

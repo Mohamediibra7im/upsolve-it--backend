@@ -25,7 +25,7 @@ const TARGET_BAND = 100;
 export function getDefaultTrainingLevelDocs(): TrainingLevelSeedDoc[] {
   const out: TrainingLevelSeedDoc[] = [];
   for (let id = 1; id <= 110; id++) {
-    const linear = Math.round(900 + (4050 - 900) * (id - 1) / 109);
+    const linear = Math.round(900 + ((4050 - 900) * (id - 1)) / 109);
     const performance = Math.max(
       800,
       Math.min(4050, Math.round(linear / TARGET_BAND) * TARGET_BAND),

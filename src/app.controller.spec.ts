@@ -1,6 +1,8 @@
+/// <reference types="jest" />
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { Response } from 'express';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -15,8 +17,11 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should redirect to /docs', () => {
+      const redirectMock = jest.fn();
+      const res = { redirect: redirectMock } as unknown as Response;
+      appController.getHello(res);
+      expect(redirectMock).toHaveBeenCalledWith('/docs');
     });
   });
 });

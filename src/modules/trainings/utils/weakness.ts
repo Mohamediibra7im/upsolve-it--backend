@@ -7,7 +7,12 @@ export function weakScore(agg: TagAgg): number {
 export function topWeakTags(
   byTag: Map<string, TagAgg>,
   limit: number,
-): { tag: string; score: number; unsolvedCount: number; slowSolvedCount: number }[] {
+): {
+  tag: string;
+  score: number;
+  unsolvedCount: number;
+  slowSolvedCount: number;
+}[] {
   return Array.from(byTag.entries())
     .map(([tag, v]) => ({
       tag,

@@ -29,4 +29,3 @@ import { UserStatsModule } from '../user-stats/user-stats.module';
   exports: [UpsolveService],
 })
 export class UpsolveModule {}
-
