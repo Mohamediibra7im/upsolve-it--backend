@@ -20,6 +20,7 @@ import { UpsertSheetDto } from './dto/upsert-sheet.dto';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { ReorderDto } from './dto/reorder.dto';
 import { ImportProblemsDto } from './dto/import-problems.dto';
+import { DeleteProblemsDto } from './dto/delete-problems.dto';
 
 @Controller('admin/roadmap')
 export class RoadmapAdminController {
@@ -208,6 +209,18 @@ export class RoadmapAdminController {
   ) {
     const current = await this.admin.requireAdmin(authorization);
     return await this.roadmap.deleteProblem(id, {
+      adminId: String(current._id),
+      adminHandle: current.codeforcesHandle ?? 'admin',
+    });
+  }
+
+  @Delete('problems')
+  async deleteProblems(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: DeleteProblemsDto,
+  ) {
+    const current = await this.admin.requireAdmin(authorization);
+    return await this.roadmap.deleteProblems(body.problemIds, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });

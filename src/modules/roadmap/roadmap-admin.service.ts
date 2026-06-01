@@ -621,4 +621,31 @@ export class RoadmapAdminService {
 
     return { ok: true };
   }
+
+  async deleteProblems(problemIds: string[], audit?: RoadmapAdminAudit) {
+    const ids = problemIds.map((id) => this.toObjectId(id, 'Problem'));
+    const docs = await this.problemModel.find({ _id: { $in: ids } });
+    if (!docs.length) throw new NotFoundException('No problems found');
+
+    await this.problemModel.deleteMany({ _id: { $in: ids } });
+
+    for (const doc of docs) {
+      await this.problemModel.updateMany(
+        { sheetId: doc.sheetId, orderIndex: { $gt: doc.orderIndex } },
+        { $inc: { orderIndex: -1 } },
+      );
+    }
+
+    if (audit) {
+      await this.auditLogs.logAction(
+        'DELETE_ROADMAP_PROBLEM',
+        'RoadmapProblem',
+        audit.adminId,
+        audit.adminHandle,
+        { problemIds: ids.map(String) },
+      );
+    }
+
+    return { ok: true, deleted: docs.length };
+  }
 }
