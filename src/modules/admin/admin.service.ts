@@ -45,21 +45,307 @@ export class AdminService {
   }
 
   async stats() {
-    const userStats = await this.userModel.aggregate([
-      {
-        $group: {
-          _id: null,
-          totalUsers: { $sum: 1 },
-          adminUsers: {
-            $sum: { $cond: [{ $eq: ['$role', 'admin'] }, 1, 0] },
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const trendStart = new Date(now);
+    trendStart.setUTCHours(0, 0, 0, 0);
+    trendStart.setUTCDate(trendStart.getUTCDate() - 6);
+    const trendStartMs = trendStart.getTime();
+
+    const solvedProblemsExpression = {
+      $size: {
+        $filter: {
+          input: { $ifNull: ['$problems', []] },
+          as: 'problem',
+          cond: {
+            $or: [
+              { $eq: ['$$problem.isSolved', true] },
+              { $ne: [{ $ifNull: ['$$problem.solvedTime', null] }, null] },
+              { $ne: [{ $ifNull: ['$$problem.solvedAt', null] }, null] },
+            ],
           },
         },
       },
+    };
+
+    const [
+      userStats,
+      trainingStats,
+      upsolveStats,
+      ratingBandsRaw,
+      trainingModesRaw,
+      userTrendRaw,
+      trainingTrendRaw,
+      upsolveTrendRaw,
+      activeTrainingUsers,
+      activeUpsolveUsers,
+    ] = await Promise.all([
+      this.userModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalUsers: { $sum: 1 },
+            adminUsers: {
+              $sum: { $cond: [{ $eq: ['$role', 'admin'] }, 1, 0] },
+            },
+            recentlyJoinedUsers: {
+              $sum: { $cond: [{ $gte: ['$createdAt', thirtyDaysAgo] }, 1, 0] },
+            },
+            averageRating: { $avg: { $ifNull: ['$rating', 0] } },
+          },
+        },
+      ]),
+      this.trainingModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalTrainings: { $sum: 1 },
+            completedTrainings: {
+              $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] },
+            },
+            activeTrainings: {
+              $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] },
+            },
+            abandonedTrainings: {
+              $sum: { $cond: [{ $eq: ['$status', 'abandoned'] }, 1, 0] },
+            },
+            totalTrainingProblems: {
+              $sum: { $size: { $ifNull: ['$problems', []] } },
+            },
+            solvedTrainingProblems: { $sum: solvedProblemsExpression },
+            averagePerformance: { $avg: '$performance' },
+            bestPerformance: { $max: '$performance' },
+          },
+        },
+      ]),
+      this.upsolveModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalUpsolvedProblems: { $sum: 1 },
+            completedUpsolves: {
+              $sum: {
+                $cond: [
+                  { $ne: [{ $ifNull: ['$solvedTime', null] }, null] },
+                  1,
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      ]),
+      this.userModel.aggregate([
+        {
+          $project: {
+            band: {
+              $switch: {
+                branches: [
+                  {
+                    case: { $lt: [{ $ifNull: ['$rating', 0] }, 1200] },
+                    then: '<1200',
+                  },
+                  {
+                    case: { $lt: [{ $ifNull: ['$rating', 0] }, 1400] },
+                    then: '1200-1399',
+                  },
+                  {
+                    case: { $lt: [{ $ifNull: ['$rating', 0] }, 1600] },
+                    then: '1400-1599',
+                  },
+                  {
+                    case: { $lt: [{ $ifNull: ['$rating', 0] }, 1900] },
+                    then: '1600-1899',
+                  },
+                  {
+                    case: { $lt: [{ $ifNull: ['$rating', 0] }, 2100] },
+                    then: '1900-2099',
+                  },
+                  {
+                    case: { $lt: [{ $ifNull: ['$rating', 0] }, 2400] },
+                    then: '2100-2399',
+                  },
+                ],
+                default: '2400+',
+              },
+            },
+          },
+        },
+        { $group: { _id: '$band', count: { $sum: 1 } } },
+      ]),
+      this.trainingModel.aggregate([
+        {
+          $group: {
+            _id: '$trainingMode',
+            sessions: { $sum: 1 },
+            solved: { $sum: solvedProblemsExpression },
+          },
+        },
+        { $sort: { sessions: -1 } },
+      ]),
+      this.userModel.aggregate([
+        { $match: { createdAt: { $gte: trendStart } } },
+        {
+          $group: {
+            _id: {
+              $dateToString: { format: '%Y-%m-%d', date: '$createdAt' },
+            },
+            users: { $sum: 1 },
+          },
+        },
+      ]),
+      this.trainingModel.aggregate([
+        { $match: { startTime: { $gte: trendStartMs } } },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: { $toDate: '$startTime' },
+              },
+            },
+            sessions: { $sum: 1 },
+          },
+        },
+      ]),
+      this.upsolveModel.aggregate([
+        { $match: { createdAt: { $gte: trendStart } } },
+        {
+          $group: {
+            _id: {
+              $dateToString: { format: '%Y-%m-%d', date: '$createdAt' },
+            },
+            upsolves: { $sum: 1 },
+          },
+        },
+      ]),
+      this.trainingModel.distinct('user', {
+        startTime: { $gte: thirtyDaysAgo.getTime() },
+      }),
+      this.upsolveModel.distinct('user', {
+        $or: [
+          { createdAt: { $gte: thirtyDaysAgo } },
+          { solvedTime: { $gte: thirtyDaysAgo.getTime() } },
+        ],
+      }),
+    ]);
+
+    const userTotals = userStats[0] ?? {};
+    const trainingTotals = trainingStats[0] ?? {};
+    const upsolveTotals = upsolveStats[0] ?? {};
+    const totalUsers = userTotals.totalUsers ?? 0;
+    const adminUsers = userTotals.adminUsers ?? 0;
+    const totalTrainingProblems = trainingTotals.totalTrainingProblems ?? 0;
+    const solvedTrainingProblems = trainingTotals.solvedTrainingProblems ?? 0;
+    const totalUpsolvedProblems = upsolveTotals.totalUpsolvedProblems ?? 0;
+    const completedUpsolves = upsolveTotals.completedUpsolves ?? 0;
+
+    const ratingBandOrder = [
+      '<1200',
+      '1200-1399',
+      '1400-1599',
+      '1600-1899',
+      '1900-2099',
+      '2100-2399',
+      '2400+',
+    ];
+    const ratingBandMap = new Map(
+      ratingBandsRaw.map((band) => [band._id, band.count]),
+    );
+
+    const modeOrder = ['ladder', 'weakness', 'speed', 'contest', 'endurance'];
+    const modeMap = new Map(
+      trainingModesRaw.map((mode) => [
+        mode._id ?? 'ladder',
+        { sessions: mode.sessions ?? 0, solved: mode.solved ?? 0 },
+      ]),
+    );
+
+    const trendMap = new Map<
+      string,
+      {
+        date: string;
+        label: string;
+        users: number;
+        sessions: number;
+        upsolves: number;
+      }
+    >();
+    for (let index = 0; index < 7; index += 1) {
+      const date = new Date(trendStart);
+      date.setUTCDate(trendStart.getUTCDate() + index);
+      const dateKey = date.toISOString().slice(0, 10);
+      trendMap.set(dateKey, {
+        date: dateKey,
+        label: date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        }),
+        users: 0,
+        sessions: 0,
+        upsolves: 0,
+      });
+    }
+    for (const row of userTrendRaw) {
+      const bucket = trendMap.get(row._id);
+      if (bucket) bucket.users = row.users ?? 0;
+    }
+    for (const row of trainingTrendRaw) {
+      const bucket = trendMap.get(row._id);
+      if (bucket) bucket.sessions = row.sessions ?? 0;
+    }
+    for (const row of upsolveTrendRaw) {
+      const bucket = trendMap.get(row._id);
+      if (bucket) bucket.upsolves = row.upsolves ?? 0;
+    }
+
+    const activeUserIds = new Set([
+      ...activeTrainingUsers.map((id) => String(id)),
+      ...activeUpsolveUsers.map((id) => String(id)),
     ]);
 
     return {
-      totalUsers: userStats[0]?.totalUsers || 0,
-      adminUsers: userStats[0]?.adminUsers || 0,
+      totalUsers,
+      adminUsers,
+      regularUsers: Math.max(totalUsers - adminUsers, 0),
+      recentlyJoinedUsers: userTotals.recentlyJoinedUsers ?? 0,
+      activeUsers: activeUserIds.size,
+      averageRating: Math.round(Number(userTotals.averageRating) || 0),
+      totalTrainings: trainingTotals.totalTrainings ?? 0,
+      completedTrainings: trainingTotals.completedTrainings ?? 0,
+      activeTrainings: trainingTotals.activeTrainings ?? 0,
+      abandonedTrainings: trainingTotals.abandonedTrainings ?? 0,
+      totalTrainingProblems,
+      solvedTrainingProblems,
+      solvingRate:
+        totalTrainingProblems > 0
+          ? Math.round((solvedTrainingProblems / totalTrainingProblems) * 100)
+          : 0,
+      averagePerformance: Math.round(
+        Number(trainingTotals.averagePerformance) || 0,
+      ),
+      bestPerformance: Math.round(Number(trainingTotals.bestPerformance) || 0),
+      totalUpsolvedProblems,
+      completedUpsolves,
+      upsolveSolveRate:
+        totalUpsolvedProblems > 0
+          ? Math.round((completedUpsolves / totalUpsolvedProblems) * 100)
+          : 0,
+      ratingBands: ratingBandOrder.map((label) => ({
+        label,
+        count: ratingBandMap.get(label) ?? 0,
+      })),
+      trainingModes: modeOrder.map((mode) => {
+        const modeStats = modeMap.get(mode) ?? { sessions: 0, solved: 0 };
+        return {
+          mode,
+          label: mode.charAt(0).toUpperCase() + mode.slice(1),
+          sessions: modeStats.sessions,
+          solved: modeStats.solved,
+        };
+      }),
+      activityTrend: Array.from(trendMap.values()),
     };
   }
 
