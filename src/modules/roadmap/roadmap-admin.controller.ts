@@ -21,6 +21,7 @@ import { CreateProblemDto } from './dto/create-problem.dto';
 import { ReorderDto } from './dto/reorder.dto';
 import { ImportProblemsDto } from './dto/import-problems.dto';
 import { DeleteProblemsDto } from './dto/delete-problems.dto';
+import { BulkAddProblemsDto } from './dto/bulk-add-problems.dto';
 
 @Controller('admin/roadmap')
 export class RoadmapAdminController {
@@ -189,6 +190,19 @@ export class RoadmapAdminController {
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { problem };
+  }
+
+  @Post('sheets/:id/problems/bulk')
+  async addProblems(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('id') id: string,
+    @Body() body: BulkAddProblemsDto,
+  ) {
+    const current = await this.admin.requireAdmin(authorization);
+    return await this.roadmap.addProblems(id, body.problems, {
+      adminId: String(current._id),
+      adminHandle: current.codeforcesHandle ?? 'admin',
+    });
   }
 
   @Patch('problems/:id/reorder')

@@ -590,6 +590,68 @@ export class RoadmapAdminService {
     return doc;
   }
 
+  async addProblems(
+    sheetId: string,
+    dtos: Array<{ cfProblemId: string; title?: string; xpReward?: number }>,
+    audit?: RoadmapAdminAudit,
+  ) {
+    const id = this.toObjectId(sheetId, 'Sheet');
+    const sheet = await this.sheetModel.findById(id);
+    if (!sheet) throw new NotFoundException('Sheet not found');
+
+    const existing = await this.problemModel
+      .find({ sheetId: id })
+      .select('cfProblemId')
+      .lean();
+    const existingIds = new Set(existing.map((p) => p.cfProblemId));
+
+    const maxIndex = await this.getMaxOrderIndex(this.problemModel, {
+      sheetId: id,
+    });
+
+    const defaultXp =
+      (await this.getXpPerAcceptedProblem(sheet.topicId)) ?? 10;
+
+    const docs: Array<{
+      sheetId: Types.ObjectId;
+      cfProblemId: string;
+      title: string;
+      orderIndex: number;
+      xpReward: number;
+    }> = [];
+
+    let orderIndex = maxIndex;
+    for (const dto of dtos) {
+      if (existingIds.has(dto.cfProblemId)) continue;
+      orderIndex++;
+      docs.push({
+        sheetId: id,
+        cfProblemId: dto.cfProblemId,
+        title: dto.title ?? '',
+        orderIndex,
+        xpReward: dto.xpReward ?? defaultXp,
+      });
+    }
+
+    if (docs.length === 0) {
+      return { ok: true, inserted: 0, skipped: dtos.length };
+    }
+
+    const inserted = await this.problemModel.insertMany(docs);
+
+    if (audit) {
+      await this.auditLogs.logAction(
+        'CREATE_ROADMAP_PROBLEM',
+        'RoadmapProblem',
+        audit.adminId,
+        audit.adminHandle,
+        { sheetId: String(id), count: inserted.length },
+      );
+    }
+
+    return { ok: true, inserted: inserted.length, skipped: dtos.length - inserted.length };
+  }
+
   async reorderProblemOnly(problemId: string, orderIndex: number) {
     const id = this.toObjectId(problemId, 'Problem');
     const doc = await this.problemModel.findById(id);

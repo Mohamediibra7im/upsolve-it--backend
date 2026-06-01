@@ -10,3 +10,4 @@ export * from './update-video-progress.dto';
 export * from './update-problem.dto';
 export * from './import-problems.dto';
 export * from './delete-problems.dto';
+export * from './bulk-add-problems.dto';
