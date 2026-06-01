@@ -41,6 +41,13 @@ export class RoadmapPublicController {
     return await this.progress.getUserSummary(userId);
   }
 
+  @Get('user/activity')
+  async getUserActivity(@Headers('authorization') authorization?: string) {
+    const userId = await this.roadmap.resolveUserId(authorization);
+    if (!userId) throw new UnauthorizedException('Unauthorized');
+    return await this.progress.getUserActivity(userId);
+  }
+
   @Get('levels/:id')
   async getLevel(
     @Headers('authorization') authorization: string | undefined,

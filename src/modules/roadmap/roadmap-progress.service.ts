@@ -757,6 +757,30 @@ export class RoadmapProgressService {
     };
   }
 
+  async getUserActivity(userId: string) {
+    const userOid = new Types.ObjectId(userId);
+
+    const solvedProblems = await this.problemProgressModel
+      .find({ userId: userOid, isSolved: true, solvedAt: { $ne: null } })
+      .select('solvedAt')
+      .lean();
+
+    const topicCompletions = await this.xpTransactionModel
+      .find({ userId: userOid, sourceType: 'topic' })
+      .select('createdAt')
+      .lean<{ createdAt?: Date }[]>();
+
+    const problemDates = solvedProblems
+      .map((p) => p.solvedAt?.toISOString())
+      .filter(Boolean) as string[];
+
+    const topicDates = topicCompletions
+      .map((t) => t.createdAt?.toISOString())
+      .filter(Boolean) as string[];
+
+    return { problemDates, topicDates };
+  }
+
   async getLeaderboard(query: { level?: string; period?: string }) {
     const levelStr =
       query.level && query.level !== 'undefined' && query.level !== 'null'
