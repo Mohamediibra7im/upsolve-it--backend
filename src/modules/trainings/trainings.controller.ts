@@ -6,6 +6,7 @@ import {
   Post,
   Body,
   Param,
+  Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import { TrainingsService } from './trainings.service';
@@ -18,8 +19,9 @@ export class TrainingsController {
   async create(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: any,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     const training = await this.trainings.createTraining(
       String(user._id),
@@ -29,8 +31,8 @@ export class TrainingsController {
   }
 
   @Get()
-  async list(@Headers('authorization') authorization: string | undefined) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+  async list(@Headers('authorization') authorization: string | undefined, @Req() req: any) {
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.trainings.listTrainings(String(user._id));
   }
@@ -39,8 +41,9 @@ export class TrainingsController {
   async remove(
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.trainings.deleteTraining(String(user._id), id);
   }

@@ -6,6 +6,7 @@ import {
   Headers,
   Param,
   Post,
+  Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import { TrainingsService } from '../trainings/trainings.service';
@@ -26,8 +27,9 @@ export class FriendsController {
   @Get('requests')
   async listRequests(
     @Headers('authorization') authorization: string | undefined,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.listRequests(String(user._id));
   }
@@ -36,8 +38,9 @@ export class FriendsController {
   async sendRequest(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: AddFriendDto,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.sendRequest(
       String(user._id),
@@ -49,8 +52,9 @@ export class FriendsController {
   async acceptRequest(
     @Headers('authorization') authorization: string | undefined,
     @Param('requestId') requestId: string,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.acceptRequest(String(user._id), requestId);
   }
@@ -59,8 +63,9 @@ export class FriendsController {
   async declineRequest(
     @Headers('authorization') authorization: string | undefined,
     @Param('requestId') requestId: string,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.declineRequest(String(user._id), requestId);
   }
@@ -69,8 +74,9 @@ export class FriendsController {
   async cancelRequest(
     @Headers('authorization') authorization: string | undefined,
     @Param('requestId') requestId: string,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.cancelOutgoingRequest(
       String(user._id),
@@ -79,8 +85,8 @@ export class FriendsController {
   }
 
   @Get()
-  async list(@Headers('authorization') authorization: string | undefined) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+  async list(@Headers('authorization') authorization: string | undefined, @Req() req: any) {
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.listFriends(String(user._id));
   }
@@ -89,8 +95,9 @@ export class FriendsController {
   async friendStats(
     @Headers('authorization') authorization: string | undefined,
     @Param('userId') friendUserId: string,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.getFriendStats(String(user._id), friendUserId);
   }
@@ -99,8 +106,9 @@ export class FriendsController {
   async remove(
     @Headers('authorization') authorization: string | undefined,
     @Param('userId') friendUserId: string,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.removeFriend(String(user._id), friendUserId);
   }

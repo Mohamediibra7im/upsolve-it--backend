@@ -8,6 +8,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { TrainingLevelsService } from '../training-levels/training-levels.service';
@@ -21,14 +22,14 @@ export class AdminController {
   ) {}
 
   @Get('stats')
-  async stats(@Headers('authorization') authorization?: string) {
-    await this.admin.requireAdmin(authorization);
+  async stats(@Headers('authorization') authorization?: string, @Req() req?: any) {
+    await this.admin.requireAdmin(authorization, req?.cookies?.accessToken);
     return await this.admin.stats();
   }
 
   @Get('users')
-  async users(@Headers('authorization') authorization?: string) {
-    await this.admin.requireAdmin(authorization);
+  async users(@Headers('authorization') authorization?: string, @Req() req?: any) {
+    await this.admin.requireAdmin(authorization, req?.cookies?.accessToken);
     return await this.admin.listUsers();
   }
 
@@ -36,8 +37,9 @@ export class AdminController {
   async updateRole(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: { userId: string; role: 'admin' | 'user' },
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.admin.updateUserRole(
       String(current._id),
       body.userId,
@@ -49,8 +51,9 @@ export class AdminController {
   async userStats(
     @Headers('authorization') authorization: string | undefined,
     @Param('userId') userId: string,
+    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization);
+    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.admin.userStats(userId);
   }
 
@@ -58,8 +61,9 @@ export class AdminController {
   async syncUserRating(
     @Headers('authorization') authorization: string | undefined,
     @Param('userId') userId: string,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.admin.syncUserRating(String(current._id), userId);
   }
 
@@ -67,8 +71,9 @@ export class AdminController {
   async syncBatchUserRatings(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: { userIds: string[] },
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.admin.syncBatchUserRatings(
       String(current._id),
       body.userIds,
@@ -79,8 +84,9 @@ export class AdminController {
   async replaceTrainingLevels(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: ReplaceLevelsBodyDto,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.trainingLevels.replaceAll(body.levels, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -91,8 +97,9 @@ export class AdminController {
   @Post('levels/reseed')
   async reseedTrainingLevels(
     @Headers('authorization') authorization: string | undefined,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.trainingLevels.reseedFromSeedFile({
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -102,13 +109,14 @@ export class AdminController {
   @Get('logs')
   async listLogs(
     @Headers('authorization') authorization: string | undefined,
+    @Req() req: any,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('action') action?: string,
     @Query('entity') entity?: string,
     @Query('performedByHandle') performedByHandle?: string,
   ) {
-    await this.admin.requireAdmin(authorization);
+    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.admin.listLogs(
       limit ? Number.parseInt(limit) : undefined,
       offset ? Number.parseInt(offset) : undefined,

@@ -13,7 +13,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
-type RequestWithCookies = Request & { cookies?: { refreshToken?: string } };
+type RequestWithCookies = Request & { cookies?: { refreshToken?: string; accessToken?: string } };
 
 @Controller('auth')
 export class AuthController {
@@ -33,7 +33,8 @@ export class AuthController {
       dto.confirmPassword,
     );
     this.setRefreshCookie(res, result.refreshToken);
-    return { user: result.user, token: result.token };
+    this.setAccessTokenCookie(res, result.token);
+    return { user: result.user };
   }
 
   @Post('login')
@@ -50,7 +51,8 @@ export class AuthController {
       ip,
     );
     this.setRefreshCookie(res, result.refreshToken);
-    return { user: result.user, token: result.token };
+    this.setAccessTokenCookie(res, result.token);
+    return { user: result.user };
   }
 
   @Post('refresh')
@@ -65,7 +67,8 @@ export class AuthController {
     const userAgent = req.header('user-agent') ?? 'unknown';
     const result = await this.auth.refresh(refreshToken, ip, userAgent);
     this.setRefreshCookie(res, result.refreshToken);
-    return { user: result.user, token: result.token };
+    this.setAccessTokenCookie(res, result.token);
+    return { user: result.user };
   }
 
   @Post('logout')
@@ -77,6 +80,11 @@ export class AuthController {
     const refreshToken = req.cookies?.refreshToken;
     if (refreshToken) await this.auth.logout(refreshToken);
     res.clearCookie('refreshToken', {
+      path: '/',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+    });
+    res.clearCookie('accessToken', {
       path: '/',
       secure: isProduction,
       sameSite: isProduction ? 'none' : 'lax',
@@ -100,8 +108,8 @@ export class AuthController {
   }
 
   @Post('reset-pin')
-  async resetPin(@Req() req: Request, @Body() body: any) {
-    const accessToken = req.header('authorization')?.split(' ')[1];
+  async resetPin(@Req() req: RequestWithCookies, @Body() body: any) {
+    const accessToken = req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
     return await this.auth.resetPin({
       resetToken: body?.resetToken,
       newPassword: body?.newPassword,
@@ -111,8 +119,8 @@ export class AuthController {
   }
 
   @Post('sync-profile')
-  async syncProfile(@Req() req: Request) {
-    const token = req.header('authorization')?.split(' ')[1];
+  async syncProfile(@Req() req: RequestWithCookies) {
+    const token = req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
     if (!token) throw new UnauthorizedException('Unauthorized');
     return await this.auth.syncProfile(token);
   }
@@ -124,6 +132,17 @@ export class AuthController {
       secure: isProduction,
       sameSite: isProduction ? 'none' : 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+  }
+
+  private setAccessTokenCookie(res: Response, accessTokenValue: string) {
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
+    res.cookie('accessToken', accessTokenValue, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      maxAge: 15 * 60 * 1000,
       path: '/',
     });
   }

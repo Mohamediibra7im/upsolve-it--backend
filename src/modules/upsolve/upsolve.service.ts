@@ -23,8 +23,8 @@ export class UpsolveService {
     private readonly dismissedModel: Model<DismissedUpsolveDocument>,
   ) {}
 
-  async getUserFromAuthHeader(authHeader?: string) {
-    const token = authHeader?.split(' ')[1];
+  async getUserFromAuthHeader(authHeader?: string, accessTokenCookie?: string) {
+    const token = authHeader?.split(' ')[1] ?? accessTokenCookie;
     if (!token) return null;
     const decoded = await this.auth.verifyAccessToken(token);
     if (!decoded) return null;

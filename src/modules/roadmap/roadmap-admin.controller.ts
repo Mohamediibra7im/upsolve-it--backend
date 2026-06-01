@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Req,
 } from '@nestjs/common';
 import { AdminService } from '../admin/admin.service';
 import { RoadmapAdminService } from './roadmap-admin.service';
@@ -32,8 +33,8 @@ export class RoadmapAdminController {
   ) {}
 
   @Get('levels')
-  async listLevels(@Headers('authorization') authorization?: string) {
-    await this.admin.requireAdmin(authorization);
+  async listLevels(@Headers('authorization') authorization?: string, @Req() req?: any) {
+    await this.admin.requireAdmin(authorization, req?.cookies?.accessToken);
     const levels = await this.roadmap.listLevels();
     return { levels };
   }
@@ -42,8 +43,9 @@ export class RoadmapAdminController {
   async createLevel(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: CreateLevelDto,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const level = await this.roadmap.createLevel(body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -56,8 +58,9 @@ export class RoadmapAdminController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: UpdateLevelDto,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const level = await this.roadmap.updateLevel(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -69,8 +72,9 @@ export class RoadmapAdminController {
   async deleteLevel(
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.roadmap.deleteLevel(id, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -81,8 +85,9 @@ export class RoadmapAdminController {
   async listTopics(
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
+    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization);
+    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const topics = await this.roadmap.listTopics(id);
     return { topics };
   }
@@ -92,8 +97,9 @@ export class RoadmapAdminController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: CreateTopicDto,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const topic = await this.roadmap.createTopic(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -106,8 +112,9 @@ export class RoadmapAdminController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: UpdateTopicDto,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const topic = await this.roadmap.updateTopic(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -120,8 +127,9 @@ export class RoadmapAdminController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: ReorderDto,
+    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization);
+    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const topic = await this.roadmap.reorderTopicOnly(id, body.orderIndex);
     return { topic };
   }
@@ -130,8 +138,9 @@ export class RoadmapAdminController {
   async deleteTopic(
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.roadmap.deleteTopic(id, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -143,8 +152,9 @@ export class RoadmapAdminController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: UpsertVideoDto,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const video = await this.roadmap.upsertVideo(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -156,8 +166,9 @@ export class RoadmapAdminController {
   async deleteVideo(
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.roadmap.deleteVideo(id, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -169,8 +180,9 @@ export class RoadmapAdminController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: UpsertSheetDto,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const sheet = await this.roadmap.upsertSheet(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -183,8 +195,9 @@ export class RoadmapAdminController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: CreateProblemDto,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const problem = await this.roadmap.addProblem(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -197,8 +210,9 @@ export class RoadmapAdminController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: BulkAddProblemsDto,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.roadmap.addProblems(id, body.problems, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -210,8 +224,9 @@ export class RoadmapAdminController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: ReorderDto,
+    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization);
+    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const problem = await this.roadmap.reorderProblemOnly(id, body.orderIndex);
     return { problem };
   }
@@ -220,8 +235,9 @@ export class RoadmapAdminController {
   async deleteProblem(
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.roadmap.deleteProblem(id, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -232,8 +248,9 @@ export class RoadmapAdminController {
   async deleteProblems(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: DeleteProblemsDto,
+    @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization);
+    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.roadmap.deleteProblems(body.problemIds, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -245,8 +262,9 @@ export class RoadmapAdminController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: ImportProblemsDto,
+    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization);
+    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.progress.importProblems(id, body);
   }
 }

@@ -5,6 +5,7 @@ import {
   Headers,
   Param,
   Post,
+  Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import { TrainingsService } from './trainings.service';
@@ -21,8 +22,9 @@ export class TrainingSessionsController {
   async create(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: Record<string, unknown>,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     const doc = await this.sessions.createSession(String(user._id), body);
     return { sessionId: String(doc._id), session: doc };
@@ -34,8 +36,9 @@ export class TrainingSessionsController {
     @Param('id') id: string,
     @Param('problemId') problemId: string,
     @Body() body?: { at?: number },
+    @Req() req?: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req?.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     const decoded = decodeURIComponent(problemId);
     await this.sessions.markProblemStart(
@@ -52,8 +55,9 @@ export class TrainingSessionsController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: { problemUpdates?: Record<string, Record<string, unknown>> },
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     const doc = await this.sessions.syncSession(String(user._id), id, body);
     return { session: doc };
@@ -68,8 +72,9 @@ export class TrainingSessionsController {
       endTime?: number;
       problemUpdates?: Record<string, Record<string, unknown>>;
     },
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     const doc = await this.sessions.endSession(String(user._id), id, body);
     return { session: doc };
@@ -79,8 +84,9 @@ export class TrainingSessionsController {
   async review(
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
+    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization);
+    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.sessions.getReview(String(user._id), id);
   }

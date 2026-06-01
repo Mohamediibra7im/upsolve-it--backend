@@ -58,8 +58,8 @@ export class RoadmapPublicService {
     private readonly problemProgressModel: Model<UserProblemProgressDocument>,
   ) {}
 
-  async resolveUserId(authHeader?: string): Promise<string | null> {
-    const token = authHeader?.replace('Bearer ', '') ?? '';
+  async resolveUserId(authHeader?: string, accessTokenCookie?: string): Promise<string | null> {
+    const token = authHeader?.replace('Bearer ', '') ?? accessTokenCookie ?? '';
     if (!token) return null;
     const decoded = await this.auth.verifyAccessToken(token);
     return decoded?.userId ?? null;

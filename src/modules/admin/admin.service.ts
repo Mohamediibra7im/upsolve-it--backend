@@ -33,8 +33,8 @@ export class AdminService {
     private readonly auditLogs: AuditLogsService,
   ) {}
 
-  async requireAdmin(authHeader?: string) {
-    const token = authHeader?.replace('Bearer ', '') ?? '';
+  async requireAdmin(authHeader?: string, accessTokenCookie?: string) {
+    const token = authHeader?.replace('Bearer ', '') ?? accessTokenCookie ?? '';
     const decoded = token ? await this.auth.verifyAccessToken(token) : null;
     if (!decoded) throw new UnauthorizedException('Unauthorized');
     const currentUser = await this.userModel.findById(decoded.userId);
