@@ -15,6 +15,12 @@ import {
 } from './schemas/refresh-token.schema';
 import { User, type UserDocument } from './schemas/user.schema';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { UserXp, type UserXpDocument } from '../roadmap/schemas/user-xp.schema';
+import {
+  XpTransaction,
+  type XpTransactionDocument,
+} from '../roadmap/schemas/xp-transaction.schema';
+import { Types } from 'mongoose';
 
 const loginLimiter = new RateLimiterMemory({
   points: 5,
@@ -95,6 +101,9 @@ export class AuthService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(RefreshToken.name)
     private readonly refreshTokenModel: Model<RefreshTokenDocument>,
+    @InjectModel(UserXp.name) private readonly xpModel: Model<UserXpDocument>,
+    @InjectModel(XpTransaction.name)
+    private readonly xpTransactionModel: Model<XpTransactionDocument>,
     private readonly jwt: JwtService,
     private readonly auditLogs: AuditLogsService,
   ) {}
@@ -585,7 +594,30 @@ export class AuthService {
       verificationCodeExpiry: null,
     });
 
-    return { message: 'Profile verified successfully' };
+    // Award 50 XP for verification
+    const VERIFICATION_XP = 50;
+    const userId = new Types.ObjectId(decoded.userId);
+    try {
+      await this.xpTransactionModel.create({
+        userId,
+        amount: VERIFICATION_XP,
+        reason: 'Codeforces profile verification',
+        sourceType: 'verification',
+        sourceId: userId,
+      });
+      await this.xpModel.findOneAndUpdate(
+        { userId },
+        { $inc: { totalXp: VERIFICATION_XP } },
+        { upsert: true },
+      );
+    } catch {
+      // XP award is best-effort, don't fail verification if it errors
+    }
+
+    return {
+      message: 'Profile verified successfully',
+      xpEarned: VERIFICATION_XP,
+    };
   }
 
   async logout(refreshTokenValue: string) {

@@ -10,6 +10,11 @@ import {
 } from './schemas/refresh-token.schema';
 import { User, UserSchema } from './schemas/user.schema';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { UserXp, UserXpSchema } from '../roadmap/schemas/user-xp.schema';
+import {
+  XpTransaction,
+  XpTransactionSchema,
+} from '../roadmap/schemas/xp-transaction.schema';
 
 @Module({
   imports: [
@@ -18,6 +23,8 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: RefreshToken.name, schema: RefreshTokenSchema },
+      { name: UserXp.name, schema: UserXpSchema },
+      { name: XpTransaction.name, schema: XpTransactionSchema },
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
