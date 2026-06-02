@@ -34,6 +34,15 @@ export class User {
 
   @Prop({ enum: ['user', 'admin'], default: 'user' })
   role!: 'user' | 'admin';
+
+  @Prop({ default: false })
+  isVerified!: boolean;
+
+  @Prop({ type: String, default: null })
+  verificationCode!: string | null;
+
+  @Prop({ type: Number, default: null })
+  verificationCodeExpiry!: number | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

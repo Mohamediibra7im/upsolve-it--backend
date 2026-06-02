@@ -13,7 +13,9 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
-type RequestWithCookies = Request & { cookies?: { refreshToken?: string; accessToken?: string } };
+type RequestWithCookies = Request & {
+  cookies?: { refreshToken?: string; accessToken?: string };
+};
 
 @Controller('auth')
 export class AuthController {
@@ -109,7 +111,8 @@ export class AuthController {
 
   @Post('reset-pin')
   async resetPin(@Req() req: RequestWithCookies, @Body() body: any) {
-    const accessToken = req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
+    const accessToken =
+      req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
     return await this.auth.resetPin({
       resetToken: body?.resetToken,
       newPassword: body?.newPassword,
@@ -120,9 +123,26 @@ export class AuthController {
 
   @Post('sync-profile')
   async syncProfile(@Req() req: RequestWithCookies) {
-    const token = req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
+    const token =
+      req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
     if (!token) throw new UnauthorizedException('Unauthorized');
     return await this.auth.syncProfile(token);
+  }
+
+  @Post('generate-verification-code')
+  async generateVerificationCode(@Req() req: RequestWithCookies) {
+    const token =
+      req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
+    if (!token) throw new UnauthorizedException('Unauthorized');
+    return await this.auth.generateVerificationCode(token);
+  }
+
+  @Post('verify-codeforces-profile')
+  async verifyCodeforcesProfile(@Req() req: RequestWithCookies) {
+    const token =
+      req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
+    if (!token) throw new UnauthorizedException('Unauthorized');
+    return await this.auth.verifyCodeforcesProfile(token);
   }
 
   private setRefreshCookie(res: Response, refreshTokenValue: string) {

@@ -361,6 +361,7 @@ export class AuthService {
           organization: user.organization,
           lastSyncTime: user.lastSyncTime,
           role: user.role,
+          isVerified: user.isVerified,
         },
       };
     }
@@ -412,6 +413,7 @@ export class AuthService {
         organization: updatedUser!.organization,
         lastSyncTime: updatedUser!.lastSyncTime,
         role: updatedUser!.role,
+        isVerified: updatedUser!.isVerified,
       },
     };
   }
@@ -446,6 +448,7 @@ export class AuthService {
         organization: user.organization,
         lastSyncTime: user.lastSyncTime,
         role: user.role,
+        isVerified: user.isVerified,
       },
       token: accessToken,
       refreshToken: refreshTokenValue,
@@ -509,10 +512,80 @@ export class AuthService {
         organization: user.organization,
         lastSyncTime: user.lastSyncTime,
         role: user.role,
+        isVerified: user.isVerified,
       },
       token: accessToken,
       refreshToken: newRefreshTokenValue,
     };
+  }
+
+  async generateVerificationCode(accessToken: string) {
+    const decoded = await this.verifyAccessToken(accessToken);
+    if (!decoded) throw new UnauthorizedException('Invalid token');
+
+    const code = crypto.randomBytes(4).toString('hex');
+    const expiresAt = Date.now() + 60 * 1000; // 1 minute
+
+    await this.userModel.findByIdAndUpdate(decoded.userId, {
+      verificationCode: code,
+      verificationCodeExpiry: expiresAt,
+    });
+
+    return { code, expiresAt };
+  }
+
+  async verifyCodeforcesProfile(accessToken: string) {
+    const decoded = await this.verifyAccessToken(accessToken);
+    if (!decoded) throw new UnauthorizedException('Invalid token');
+
+    const user = await this.userModel.findById(decoded.userId);
+    if (!user) throw new BadRequestException('User not found');
+
+    if (user.isVerified) {
+      return { message: 'Profile is already verified' };
+    }
+
+    if (!user.verificationCode) {
+      throw new BadRequestException(
+        'No verification code found. Please generate one first.',
+      );
+    }
+
+    if (
+      user.verificationCodeExpiry &&
+      Date.now() > user.verificationCodeExpiry
+    ) {
+      throw new BadRequestException(
+        'Verification code has expired. Please generate a new one.',
+      );
+    }
+
+    const res = await fetch(
+      `https://codeforces.com/api/user.info?handles=${encodeURIComponent(user.codeforcesHandle)}`,
+    );
+    const data = await res.json();
+    if (data?.status !== 'OK' || !data.result?.[0]) {
+      throw new BadRequestException(
+        'Could not fetch Codeforces profile. Please try again.',
+      );
+    }
+
+    const cfUser = data.result[0];
+    const firstName = cfUser.firstName ?? '';
+
+    if (firstName !== user.verificationCode) {
+      throw new BadRequestException(
+        'Verification code not found in your Codeforces first name. Make sure you saved the changes and the code matches exactly.',
+      );
+    }
+
+    await this.userModel.findByIdAndUpdate(decoded.userId, {
+      isVerified: true,
+      verificationCode: null,
+      verificationCodeExpiry: null,
+    });
+
+    return { message: 'Profile verified successfully' };
   }
 
   async logout(refreshTokenValue: string) {
