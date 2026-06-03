@@ -26,3 +26,4 @@ XpTransactionSchema.index(
   { userId: 1, sourceType: 1, sourceId: 1 },
   { unique: true },
 );
+XpTransactionSchema.index({ createdAt: -1 });

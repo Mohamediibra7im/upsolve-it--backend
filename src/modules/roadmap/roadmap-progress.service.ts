@@ -781,13 +781,14 @@ export class RoadmapProgressService {
     return { problemDates, topicDates };
   }
 
-  async getLeaderboard(query: { level?: string; period?: string }) {
+  async getLeaderboard(query: { level?: string; period?: string; limit?: string }) {
     const levelStr =
       query.level && query.level !== 'undefined' && query.level !== 'null'
         ? query.level
         : null;
     const levelId = levelStr ? this.toObjectId(levelStr, 'Level') : null;
     const period = query.period ?? 'all';
+    const limit = query.limit ? Math.min(parseInt(query.limit, 10) || 200, 200) : 200;
     const now = Date.now();
     const since =
       period === 'weekly'
@@ -804,19 +805,17 @@ export class RoadmapProgressService {
       ]);
       xpByUser = new Map(rows.map((r) => [String(r._id), Number(r.total)]));
     } else {
-      const xpRows = await this.xpModel.find().lean();
+      const xpRows = await this.xpModel
+        .find()
+        .sort({ totalXp: -1 })
+        .limit(limit)
+        .lean();
       xpByUser = new Map(xpRows.map((r) => [String(r.userId), r.totalXp]));
     }
 
     const userIds = Array.from(xpByUser.keys()).map(
       (id) => new Types.ObjectId(id),
     );
-
-    const users = await this.userModel
-      .find({ _id: { $in: userIds } })
-      .select('codeforcesHandle avatar')
-      .lean();
-    const userMap = new Map(users.map((u) => [String(u._id), u]));
 
     let topicIds: Types.ObjectId[] | null = null;
     let problemIds: Types.ObjectId[] | null = null;
@@ -839,28 +838,35 @@ export class RoadmapProgressService {
       problemIds = problems.map((p) => p._id);
     }
 
-    const topicCounts = await this.topicProgressModel.aggregate([
-      {
-        $match: {
-          isTopicComplete: true,
-          ...(topicIds ? { topicId: { $in: topicIds } } : {}),
+    const [users, topicCounts, problemCounts] = await Promise.all([
+      this.userModel
+        .find({ _id: { $in: userIds } })
+        .select('codeforcesHandle avatar')
+        .lean(),
+      this.topicProgressModel.aggregate([
+        {
+          $match: {
+            isTopicComplete: true,
+            ...(topicIds ? { topicId: { $in: topicIds } } : {}),
+          },
         },
-      },
-      { $group: { _id: '$userId', count: { $sum: 1 } } },
+        { $group: { _id: '$userId', count: { $sum: 1 } } },
+      ]),
+      this.problemProgressModel.aggregate([
+        {
+          $match: {
+            isSolved: true,
+            ...(problemIds ? { problemId: { $in: problemIds } } : {}),
+          },
+        },
+        { $group: { _id: '$userId', count: { $sum: 1 } } },
+      ]),
     ]);
+
+    const userMap = new Map(users.map((u) => [String(u._id), u]));
     const topicMap = new Map(
       topicCounts.map((r) => [String(r._id), Number(r.count)]),
     );
-
-    const problemCounts = await this.problemProgressModel.aggregate([
-      {
-        $match: {
-          isSolved: true,
-          ...(problemIds ? { problemId: { $in: problemIds } } : {}),
-        },
-      },
-      { $group: { _id: '$userId', count: { $sum: 1 } } },
-    ]);
     const problemMap = new Map(
       problemCounts.map((r) => [String(r._id), Number(r.count)]),
     );

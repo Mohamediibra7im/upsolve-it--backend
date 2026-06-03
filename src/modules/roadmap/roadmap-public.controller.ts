@@ -31,8 +31,9 @@ export class RoadmapPublicController {
   async getLeaderboard(
     @Query('level') level?: string,
     @Query('period') period?: string,
+    @Query('limit') limit?: string,
   ) {
-    return await this.progress.getLeaderboard({ level, period });
+    return await this.progress.getLeaderboard({ level, period, limit });
   }
 
   @Get('user/summary')
