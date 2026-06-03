@@ -30,12 +30,18 @@ import {
   UserProblemProgress,
   UserProblemProgressDocument,
 } from './schemas/user-problem-progress.schema';
+import {
+  UserTopicProgress,
+  UserTopicProgressDocument,
+} from './schemas/user-topic-progress.schema';
 import { UpdateVideoProgressDto } from './dto/update-video-progress.dto';
 
 export type VideoProgressSnapshot = {
   videoPct: number;
   sheetUnlocked: boolean;
   lastPositionSec: number;
+  sheetPct: number;
+  sheetUnlockedNext: boolean;
 };
 
 @Injectable()
@@ -56,9 +62,14 @@ export class RoadmapPublicService {
     private readonly videoProgressModel: Model<UserVideoProgressDocument>,
     @InjectModel(UserProblemProgress.name)
     private readonly problemProgressModel: Model<UserProblemProgressDocument>,
+    @InjectModel(UserTopicProgress.name)
+    private readonly topicProgressModel: Model<UserTopicProgressDocument>,
   ) {}
 
-  async resolveUserId(authHeader?: string, accessTokenCookie?: string): Promise<string | null> {
+  async resolveUserId(
+    authHeader?: string,
+    accessTokenCookie?: string,
+  ): Promise<string | null> {
     const token = authHeader?.replace('Bearer ', '') ?? accessTokenCookie ?? '';
     if (!token) return null;
     const decoded = await this.auth.verifyAccessToken(token);
@@ -97,14 +108,28 @@ export class RoadmapPublicService {
       })
       .lean();
 
+    const topicProgressDocs = await this.topicProgressModel
+      .find({
+        userId: new Types.ObjectId(userId),
+        topicId: { $in: topicIds },
+      })
+      .lean();
+
+    const topicProgressMap = new Map(
+      topicProgressDocs.map((tp) => [String(tp.topicId), tp]),
+    );
+
     const map = new Map<string, VideoProgressSnapshot>();
     for (const p of progressDocs) {
       const topicId = videoToTopic.get(String(p.videoId));
       if (!topicId) continue;
+      const topicProgress = topicProgressMap.get(topicId);
       map.set(topicId, {
         videoPct: p.watchPct ?? 0,
         sheetUnlocked: Boolean(p.isThresholdMet),
         lastPositionSec: p.lastPositionSec ?? 0,
+        sheetPct: topicProgress?.sheetPct ?? 0,
+        sheetUnlockedNext: Boolean(topicProgress?.sheetUnlockedNext),
       });
     }
 
@@ -140,7 +165,7 @@ export class RoadmapPublicService {
     const unlockedCountByLevel = new Map<string, number>();
     for (const t of topics) {
       const p = progress.get(String(t._id));
-      if (!p?.sheetUnlocked) continue;
+      if (!p?.sheetUnlocked || !p?.sheetUnlockedNext) continue;
       const levelKey = String(t.levelId);
       unlockedCountByLevel.set(
         levelKey,
@@ -201,16 +226,23 @@ export class RoadmapPublicService {
     const topicRows = topics.map((t) => {
       const progress =
         progressMap.get(String(t._id)) ??
-        ({ videoPct: 0, sheetUnlocked: false, lastPositionSec: 0 } as const);
+        ({
+          videoPct: 0,
+          sheetUnlocked: false,
+          lastPositionSec: 0,
+          sheetPct: 0,
+          sheetUnlockedNext: false,
+        } as const);
 
       const isLocked = !canAccess;
       const sheetUnlocked = progress.sheetUnlocked;
+      const sheetUnlockedNext = progress.sheetUnlockedNext;
       const isComplete = false;
 
-      if (sheetUnlocked) topicsUnlockedCount += 1;
+      if (sheetUnlocked && sheetUnlockedNext) topicsUnlockedCount += 1;
 
       if (canAccess) {
-        canAccess = sheetUnlocked;
+        canAccess = sheetUnlocked && sheetUnlockedNext;
       }
 
       return {
