@@ -12,6 +12,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { TrainingLevelsModule } from './modules/training-levels/training-levels.module';
 import { FriendsModule } from './modules/friends/friends.module';
 import { RoadmapModule } from './modules/roadmap/roadmap.module';
+import { WhatsNewModule } from './modules/whats-new/whats-new.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { RoadmapModule } from './modules/roadmap/roadmap.module';
     TrainingLevelsModule,
     FriendsModule,
     RoadmapModule,
+    WhatsNewModule,
   ],
   controllers: [AppController],
   providers: [AppService],
