@@ -20,6 +20,22 @@ import {
 } from '../upsolve/schemas/upsolved-problem.schema';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { averageEffectiveProblemRatingForSession } from '../trainings/utils/session-performance';
+import {
+  RoadmapLevel,
+  type RoadmapLevelDocument,
+} from '../roadmap/schemas/roadmap-level.schema';
+import {
+  UserXp,
+  type UserXpDocument,
+} from '../roadmap/schemas/user-xp.schema';
+import {
+  UserLevelProgress,
+  type UserLevelProgressDocument,
+} from '../roadmap/schemas/user-level-progress.schema';
+import {
+  UserTopicProgress,
+  type UserTopicProgressDocument,
+} from '../roadmap/schemas/user-topic-progress.schema';
 
 @Injectable()
 export class AdminService {
@@ -30,6 +46,14 @@ export class AdminService {
     private readonly trainingModel: Model<TrainingDocument>,
     @InjectModel(UpsolvedProblem.name)
     private readonly upsolveModel: Model<UpsolvedProblemDocument>,
+    @InjectModel(RoadmapLevel.name)
+    private readonly levelModel: Model<RoadmapLevelDocument>,
+    @InjectModel(UserXp.name)
+    private readonly userXpModel: Model<UserXpDocument>,
+    @InjectModel(UserLevelProgress.name)
+    private readonly userLevelProgressModel: Model<UserLevelProgressDocument>,
+    @InjectModel(UserTopicProgress.name)
+    private readonly userTopicProgressModel: Model<UserTopicProgressDocument>,
     private readonly auditLogs: AuditLogsService,
   ) {}
 
@@ -79,6 +103,10 @@ export class AdminService {
       upsolveTrendRaw,
       activeTrainingUsers,
       activeUpsolveUsers,
+      totalLevels,
+      roadmapXpStats,
+      roadmapLevelStats,
+      roadmapTopicStats,
     ] = await Promise.all([
       this.userModel.aggregate([
         {
@@ -91,7 +119,14 @@ export class AdminService {
             recentlyJoinedUsers: {
               $sum: { $cond: [{ $gte: ['$createdAt', thirtyDaysAgo] }, 1, 0] },
             },
-            averageRating: { $avg: { $ifNull: ['$rating', 0] } },
+            verifiedUsers: {
+              $sum: { $cond: [{ $eq: ['$isVerified', true] }, 1, 0] },
+            },
+            averageRating: {
+              $avg: {
+                $cond: [{ $gt: ['$rating', 0] }, '$rating', null],
+              },
+            },
           },
         },
       ]),
@@ -228,11 +263,44 @@ export class AdminService {
           { solvedTime: { $gte: thirtyDaysAgo.getTime() } },
         ],
       }),
+      this.levelModel.countDocuments(),
+      this.userXpModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalXpEarned: { $sum: '$totalXp' },
+            usersWithXp: { $sum: 1 },
+          },
+        },
+      ]),
+      this.userLevelProgressModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalLevelsCompleted: {
+              $sum: { $cond: ['$isLevelComplete', 1, 0] },
+            },
+          },
+        },
+      ]),
+      this.userTopicProgressModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalTopicsCompleted: {
+              $sum: { $cond: ['$isTopicComplete', 1, 0] },
+            },
+          },
+        },
+      ]),
     ]);
 
     const userTotals = userStats[0] ?? {};
     const trainingTotals = trainingStats[0] ?? {};
     const upsolveTotals = upsolveStats[0] ?? {};
+    const roadmapXpTotals = roadmapXpStats[0] ?? {};
+    const roadmapLevelTotals = roadmapLevelStats[0] ?? {};
+    const roadmapTopicTotals = roadmapTopicStats[0] ?? {};
     const totalUsers = userTotals.totalUsers ?? 0;
     const adminUsers = userTotals.adminUsers ?? 0;
     const totalTrainingProblems = trainingTotals.totalTrainingProblems ?? 0;
@@ -310,6 +378,8 @@ export class AdminService {
       adminUsers,
       regularUsers: Math.max(totalUsers - adminUsers, 0),
       recentlyJoinedUsers: userTotals.recentlyJoinedUsers ?? 0,
+      verifiedUsers: userTotals.verifiedUsers ?? 0,
+      unverifiedUsers: Math.max(totalUsers - (userTotals.verifiedUsers ?? 0), 0),
       activeUsers: activeUserIds.size,
       averageRating: Math.round(Number(userTotals.averageRating) || 0),
       totalTrainings: trainingTotals.totalTrainings ?? 0,
@@ -332,6 +402,10 @@ export class AdminService {
         totalUpsolvedProblems > 0
           ? Math.round((completedUpsolves / totalUpsolvedProblems) * 100)
           : 0,
+      totalLevels: totalLevels ?? 0,
+      totalXpEarned: roadmapXpTotals.totalXpEarned ?? 0,
+      totalLevelsCompleted: roadmapLevelTotals.totalLevelsCompleted ?? 0,
+      totalTopicsCompleted: roadmapTopicTotals.totalTopicsCompleted ?? 0,
       ratingBands: ratingBandOrder.map((label) => ({
         label,
         count: ratingBandMap.get(label) ?? 0,
