@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsInt,
   IsOptional,
@@ -26,6 +27,14 @@ export class UpdateLevelDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @IsString()
+  visibility?: 'all' | 'specific_users';
+
+  @IsOptional()
+  @IsArray()
+  allowedUserIds?: string[];
 
   @IsOptional()
   @Type(() => Number)

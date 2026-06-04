@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuthService } from '../auth/auth.service';
+import { User, UserDocument } from '../auth/schemas/user.schema';
 import {
   RoadmapLevel,
   RoadmapLevelDocument,
@@ -64,6 +65,8 @@ export class RoadmapPublicService {
     private readonly problemProgressModel: Model<UserProblemProgressDocument>,
     @InjectModel(UserTopicProgress.name)
     private readonly topicProgressModel: Model<UserTopicProgressDocument>,
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>,
   ) {}
 
   async resolveUserId(
@@ -74,6 +77,21 @@ export class RoadmapPublicService {
     if (!token) return null;
     const decoded = await this.auth.verifyAccessToken(token);
     return decoded?.userId ?? null;
+  }
+
+  async resolveUser(
+    authHeader?: string,
+    accessTokenCookie?: string,
+  ): Promise<{ userId: string | null; isAdmin: boolean }> {
+    const token = authHeader?.replace('Bearer ', '') ?? accessTokenCookie ?? '';
+    if (!token) return { userId: null, isAdmin: false };
+    const decoded = await this.auth.verifyAccessToken(token);
+    if (!decoded?.userId) return { userId: null, isAdmin: false };
+    const user = await this.userModel
+      .findById(decoded.userId)
+      .select('role')
+      .lean();
+    return { userId: decoded.userId, isAdmin: user?.role === 'admin' };
   }
 
   private toObjectId(id: string, label: string): Types.ObjectId {
@@ -136,15 +154,25 @@ export class RoadmapPublicService {
     return map;
   }
 
-  async listLevels(userId: string | null) {
+  async listLevels(userId: string | null, isAdmin = false) {
     const levels = await this.levelModel
       .find({ isPublished: true })
       .sort({ orderIndex: 1 })
       .lean();
 
-    if (levels.length === 0) return [];
+    const visibleLevels = isAdmin
+      ? levels
+      : levels.filter((l) => {
+          if (l.visibility === 'specific_users') {
+            if (!userId) return false;
+            return l.allowedUserIds?.some((id) => String(id) === userId);
+          }
+          return true;
+        });
 
-    const levelIds = levels.map((l) => l._id);
+    if (visibleLevels.length === 0) return [];
+
+    const levelIds = visibleLevels.map((l) => l._id);
     const topicCounts = await this.topicModel.aggregate([
       { $match: { levelId: { $in: levelIds } } },
       { $group: { _id: '$levelId', count: { $sum: 1 } } },
@@ -173,18 +201,23 @@ export class RoadmapPublicService {
       );
     }
 
-    return levels.map((l) => ({
+    return visibleLevels.map((l) => ({
       ...l,
       topicsCount: countMap.get(String(l._id)) ?? 0,
       topicsUnlockedCount: unlockedCountByLevel.get(String(l._id)) ?? 0,
     }));
   }
 
-  async getLevelDetail(levelId: string, userId: string | null) {
+  async getLevelDetail(levelId: string, userId: string | null, isAdmin = false) {
     const level = await this.levelModel
       .findOne({ _id: this.toObjectId(levelId, 'Level'), isPublished: true })
       .lean();
     if (!level) throw new NotFoundException('Level not found');
+
+    if (!isAdmin && level.visibility === 'specific_users') {
+      const hasAccess = userId && level.allowedUserIds?.some((id) => String(id) === userId);
+      if (!hasAccess) throw new NotFoundException('Level not found');
+    }
 
     const topics = await this.topicModel
       .find({ levelId: level._id })
@@ -274,11 +307,17 @@ export class RoadmapPublicService {
     levelId: string,
     topicId: string,
     userId: string | null,
+    isAdmin = false,
   ) {
     const level = await this.levelModel
       .findOne({ _id: this.toObjectId(levelId, 'Level'), isPublished: true })
       .lean();
     if (!level) throw new NotFoundException('Level not found');
+
+    if (!isAdmin && level.visibility === 'specific_users') {
+      const hasAccess = userId && level.allowedUserIds?.some((id) => String(id) === userId);
+      if (!hasAccess) throw new NotFoundException('Level not found');
+    }
 
     const topic = await this.topicModel
       .findOne({ _id: this.toObjectId(topicId, 'Topic'), levelId: level._id })

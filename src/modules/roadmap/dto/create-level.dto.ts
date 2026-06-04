@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsInt,
   IsOptional,
@@ -7,6 +8,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { Types } from 'mongoose';
 
 export class CreateLevelDto {
   @IsString()
@@ -25,6 +27,14 @@ export class CreateLevelDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @IsString()
+  visibility?: 'all' | 'specific_users';
+
+  @IsOptional()
+  @IsArray()
+  allowedUserIds?: string[];
 
   @IsOptional()
   @Type(() => Number)

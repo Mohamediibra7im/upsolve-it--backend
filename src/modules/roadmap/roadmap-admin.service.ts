@@ -228,6 +228,8 @@ export class RoadmapAdminService {
     if (dto.title !== undefined) doc.title = dto.title;
     if (dto.description !== undefined) doc.description = dto.description;
     if (dto.isPublished !== undefined) doc.isPublished = dto.isPublished;
+    if (dto.visibility !== undefined) doc.visibility = dto.visibility;
+    if (dto.allowedUserIds !== undefined) doc.allowedUserIds = dto.allowedUserIds;
     if (dto.videoUnlockSheetPct !== undefined) {
       doc.videoUnlockSheetPct = dto.videoUnlockSheetPct;
     }

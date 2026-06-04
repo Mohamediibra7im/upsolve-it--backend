@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 
 export type RoadmapLevelDocument = HydratedDocument<RoadmapLevel>;
 
@@ -16,6 +16,12 @@ export class RoadmapLevel {
 
   @Prop({ default: false })
   isPublished!: boolean;
+
+  @Prop({ type: String, enum: ['all', 'specific_users'], default: 'all' })
+  visibility!: 'all' | 'specific_users';
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
+  allowedUserIds!: Types.ObjectId[];
 
   @Prop({ default: 80 })
   videoUnlockSheetPct!: number;
