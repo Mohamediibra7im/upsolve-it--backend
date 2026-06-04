@@ -79,19 +79,10 @@ export class RoadmapPublicService {
     return decoded?.userId ?? null;
   }
 
-  async resolveUser(
-    authHeader?: string,
-    accessTokenCookie?: string,
-  ): Promise<{ userId: string | null; isAdmin: boolean }> {
-    const token = authHeader?.replace('Bearer ', '') ?? accessTokenCookie ?? '';
-    if (!token) return { userId: null, isAdmin: false };
-    const decoded = await this.auth.verifyAccessToken(token);
-    if (!decoded?.userId) return { userId: null, isAdmin: false };
-    const user = await this.userModel
-      .findById(decoded.userId)
-      .select('role')
-      .lean();
-    return { userId: decoded.userId, isAdmin: user?.role === 'admin' };
+  private async isUserAdmin(userId: string | null): Promise<boolean> {
+    if (!userId) return false;
+    const user = await this.userModel.findById(userId).select('role').lean();
+    return user?.role === 'admin';
   }
 
   private toObjectId(id: string, label: string): Types.ObjectId {
@@ -154,11 +145,14 @@ export class RoadmapPublicService {
     return map;
   }
 
-  async listLevels(userId: string | null, isAdmin = false) {
+  async listLevels(userId: string | null) {
     const levels = await this.levelModel
       .find({ isPublished: true })
       .sort({ orderIndex: 1 })
       .lean();
+
+    const hasSpecific = levels.some((l) => l.visibility === 'specific_users');
+    const isAdmin = hasSpecific ? await this.isUserAdmin(userId) : false;
 
     const visibleLevels = isAdmin
       ? levels
@@ -208,15 +202,18 @@ export class RoadmapPublicService {
     }));
   }
 
-  async getLevelDetail(levelId: string, userId: string | null, isAdmin = false) {
+  async getLevelDetail(levelId: string, userId: string | null) {
     const level = await this.levelModel
       .findOne({ _id: this.toObjectId(levelId, 'Level'), isPublished: true })
       .lean();
     if (!level) throw new NotFoundException('Level not found');
 
-    if (!isAdmin && level.visibility === 'specific_users') {
-      const hasAccess = userId && level.allowedUserIds?.some((id) => String(id) === userId);
-      if (!hasAccess) throw new NotFoundException('Level not found');
+    if (level.visibility === 'specific_users') {
+      const isAdmin = await this.isUserAdmin(userId);
+      if (!isAdmin) {
+        const hasAccess = userId && level.allowedUserIds?.some((id) => String(id) === userId);
+        if (!hasAccess) throw new NotFoundException('Level not found');
+      }
     }
 
     const topics = await this.topicModel
@@ -307,16 +304,18 @@ export class RoadmapPublicService {
     levelId: string,
     topicId: string,
     userId: string | null,
-    isAdmin = false,
   ) {
     const level = await this.levelModel
       .findOne({ _id: this.toObjectId(levelId, 'Level'), isPublished: true })
       .lean();
     if (!level) throw new NotFoundException('Level not found');
 
-    if (!isAdmin && level.visibility === 'specific_users') {
-      const hasAccess = userId && level.allowedUserIds?.some((id) => String(id) === userId);
-      if (!hasAccess) throw new NotFoundException('Level not found');
+    if (level.visibility === 'specific_users') {
+      const isAdmin = await this.isUserAdmin(userId);
+      if (!isAdmin) {
+        const hasAccess = userId && level.allowedUserIds?.some((id) => String(id) === userId);
+        if (!hasAccess) throw new NotFoundException('Level not found');
+      }
     }
 
     const topic = await this.topicModel
