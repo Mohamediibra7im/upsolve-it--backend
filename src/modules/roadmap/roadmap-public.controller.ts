@@ -12,12 +12,14 @@ import {
 import { RoadmapPublicService } from './roadmap-public.service';
 import { RoadmapProgressService } from './roadmap-progress.service';
 import { UpdateVideoProgressDto } from './dto/update-video-progress.dto';
+import { AdminService } from '../admin/admin.service';
 
 @Controller('roadmap')
 export class RoadmapPublicController {
   constructor(
     private readonly roadmap: RoadmapPublicService,
     private readonly progress: RoadmapProgressService,
+    private readonly admin: AdminService,
   ) {}
 
   @Get('levels')
@@ -40,6 +42,20 @@ export class RoadmapPublicController {
     @Query('limit') limit?: string,
   ) {
     return await this.progress.getLeaderboard({ level, period, limit });
+  }
+
+  @Get('users/:userId/stats')
+  async getUserStats(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('userId') targetUserId: string,
+    @Req() req: any,
+  ) {
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req?.cookies?.accessToken,
+    );
+    if (!userId) throw new UnauthorizedException('Unauthorized');
+    return await this.admin.userStats(targetUserId);
   }
 
   @Get('user/summary')

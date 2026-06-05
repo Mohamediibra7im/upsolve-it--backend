@@ -552,6 +552,18 @@ export class AdminService {
       (t) => t.startTime >= thirtyDaysAgo,
     ).length;
 
+    const [xpDoc, levelsCompleted, topicsCompleted] = await Promise.all([
+      this.userXpModel.findOne({ userId: uid }).lean(),
+      this.userLevelProgressModel.countDocuments({
+        userId: uid,
+        isLevelComplete: true,
+      }),
+      this.userTopicProgressModel.countDocuments({
+        userId: uid,
+        isTopicComplete: true,
+      }),
+    ]);
+
     return {
       user: {
         codeforcesHandle: user.codeforcesHandle,
@@ -559,6 +571,10 @@ export class AdminService {
         rank: user.rank,
         maxRating: user.maxRating,
         maxRank: user.maxRank,
+        avatar: user.avatar,
+        xp: xpDoc?.totalXp ?? 0,
+        levelsCompleted,
+        topicsCompleted,
       },
       stats: {
         totalSessions,
