@@ -1,18 +1,18 @@
-import { NestFactory } from '@nestjs/core';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import { AppModule } from '../dist/app.module';
-import { ValidationPipe } from '@nestjs/common';
-import cookieParser from 'cookie-parser';
-import helmet from 'helmet';
-import { ConfigService } from '@nestjs/config';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { HttpExceptionFilter } from '../dist/common/filters/http-exception.filter';
-import express from 'express';
+const express = require('express');
+const { NestFactory } = require('@nestjs/core');
+const { ExpressAdapter } = require('@nestjs/platform-express');
+const { ValidationPipe } = require('@nestjs/common');
+const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
+const { DocumentBuilder, SwaggerModule } = require('@nestjs/swagger');
 
-let cachedHandler: any;
+let cachedHandler;
 
 async function bootstrap() {
   if (cachedHandler) return cachedHandler;
+
+  const { AppModule } = require('../dist/app.module');
+  const { HttpExceptionFilter } = require('../dist/common/filters/http-exception.filter');
 
   const expressApp = express();
   const adapter = new ExpressAdapter(expressApp);
@@ -21,7 +21,7 @@ async function bootstrap() {
     logger: false,
   });
 
-  const config = nestApp.get(ConfigService);
+  const config = nestApp.get('ConfigService');
 
   nestApp.use(helmet({ contentSecurityPolicy: false }));
   nestApp.use(cookieParser());
@@ -30,8 +30,8 @@ async function bootstrap() {
   );
   nestApp.useGlobalFilters(new HttpExceptionFilter());
 
-  const frontendOrigin = config.get<string>('FRONTEND_ORIGIN') ?? '';
-  const appUrl = config.get<string>('APP_URL') ?? '';
+  const frontendOrigin = config.get('FRONTEND_ORIGIN') ?? '';
+  const appUrl = config.get('APP_URL') ?? '';
 
   const allowedOrigins = [
     frontendOrigin,
@@ -42,10 +42,7 @@ async function bootstrap() {
   ].filter(Boolean);
 
   nestApp.enableCors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void,
-    ) => {
+    origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -78,7 +75,7 @@ async function bootstrap() {
   return expressApp;
 }
 
-export default async function handler(req: any, res: any) {
+module.exports = async function handler(req, res) {
   const app = await bootstrap();
   return app(req, res);
-}
+};
