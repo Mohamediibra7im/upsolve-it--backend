@@ -895,7 +895,7 @@ export class RoadmapProgressService {
     let rank = 1;
     for (let i = 0; i < entries.length; i += 1) {
       if (i > 0 && entries[i].totalXp < entries[i - 1].totalXp) {
-        rank = i + 1;
+        rank += 1;
       }
       entries[i].rank = rank;
     }
