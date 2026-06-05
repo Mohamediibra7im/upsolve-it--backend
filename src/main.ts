@@ -16,8 +16,8 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   validateEnv(config);
   const port = Number(config.get<string>('PORT') ?? 3000);
-  const frontendOrigin =
-    config.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:3001';
+  const frontendOrigin = config.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:3001';
+  const appUrl = config.get<string>('APP_URL') ?? '';
 
   app.use(helmet());
   app.use(cookieParser());
@@ -28,9 +28,12 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new HttpExceptionFilter());
+
   const allowedOrigins = [
     frontendOrigin,
+    appUrl,
     'http://localhost:3000',
+    'http://localhost:3001',
     'http://127.0.0.1:3000',
   ].filter(Boolean);
 
@@ -39,6 +42,7 @@ async function bootstrap() {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        logger.warn(`CORS blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
