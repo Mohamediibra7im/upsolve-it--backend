@@ -1,22 +1,29 @@
-import { Injectable } from "@nestjs/common";
-import { InjectConnection } from "@nestjs/mongoose";
-import { Connection } from "mongoose";
+import { Injectable } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/mongoose';
+import { Connection } from 'mongoose';
 
 @Injectable()
 export class HealthService {
-  constructor(
-    @InjectConnection() private readonly connection: Connection,
-  ) {}
+  constructor(@InjectConnection() private readonly connection: Connection) {}
 
-  async check(): Promise<{ status: string; timestamp: string; checks: Record<string, unknown> }> {
+  async check(): Promise<{
+    status: string;
+    timestamp: string;
+    checks: Record<string, unknown>;
+  }> {
     const checks = await Promise.allSettled([
       this.checkDatabase(),
-      this.checkMemory(),
+      Promise.resolve(this.checkMemory()),
     ]);
 
     const results = checks.map((check, index) => {
       const names = ['database', 'memory'];
-      return { name: names[index], ...(check.status === 'fulfilled' ? { status: 'up', ...check.value } : { status: 'down', error: check.reason?.message }) };
+      return {
+        name: names[index],
+        ...(check.status === 'fulfilled'
+          ? { status: 'up', ...check.value }
+          : { status: 'down', error: check.reason?.message }),
+      };
     });
 
     const allUp = results.every((r) => r.status === 'up');
@@ -49,7 +56,11 @@ export class HealthService {
     return { latency: Date.now() - start };
   }
 
-  private checkMemory(): { used: number; total: number; percentage: number } {
+  private checkMemory(): {
+    used: number;
+    total: number;
+    percentage: number;
+  } {
     const used = process.memoryUsage().heapUsed;
     const total = process.memoryUsage().heapTotal;
     return { used, total, percentage: Math.round((used / total) * 100) };

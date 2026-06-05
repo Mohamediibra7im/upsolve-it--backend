@@ -1,5 +1,5 @@
-import { Injectable, NestMiddleware, Logger } from "@nestjs/common";
-import { Request, Response, NextFunction } from "express";
+import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
 
 @Injectable()
 export class LoggingMiddleware implements NestMiddleware {
@@ -15,17 +15,20 @@ export class LoggingMiddleware implements NestMiddleware {
 
     response.setHeader('X-Request-ID', requestId);
 
-    this.logger.log(`[${requestId}] ${method} ${originalUrl} - ${ip} - ${userAgent}`);
+    this.logger.log(
+      `[${requestId}] ${method} ${originalUrl} - ${ip} - ${userAgent}`,
+    );
 
     const originalSend = response.send.bind(response);
     response.send = (body?: any): Response => {
       const duration = Date.now() - startTime;
       const { statusCode } = response;
-      
-      const logLevel = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'log';
-      
+
+      const logLevel =
+        statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'log';
+
       const message = `[${requestId}] ${method} ${originalUrl} ${statusCode} ${duration}ms`;
-      
+
       if (logLevel === 'error') {
         this.logger.error(message);
       } else if (logLevel === 'warn') {
@@ -33,7 +36,7 @@ export class LoggingMiddleware implements NestMiddleware {
       } else {
         this.logger.log(message);
       }
-      
+
       return originalSend(body);
     };
 
