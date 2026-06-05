@@ -8,15 +8,15 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import express from 'express';
 
 let cachedApp: any;
 
 async function createApp() {
   if (cachedApp) return cachedApp;
 
-  const express = require('express');
-  const app = express();
-  const adapter = new ExpressAdapter(app);
+  const expressApp = express();
+  const adapter = new ExpressAdapter(expressApp);
 
   const nestApp = await NestFactory.create(AppModule, adapter, {
     logger: false,
@@ -25,7 +25,10 @@ async function createApp() {
   const config = nestApp.get(ConfigService);
   const logger = nestApp.get(Logger);
 
-  nestApp.use(helmet());
+  nestApp.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }));
   nestApp.use(cookieParser());
   nestApp.useGlobalPipes(
     new ValidationPipe({
@@ -58,7 +61,7 @@ async function createApp() {
     credentials: true,
   });
 
-  nestApp.setGlobalPrefix('api', { exclude: ['/'] });
+  nestApp.setGlobalPrefix('api', { exclude: ['/docs', '/docs-json', '/'] });
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Upsolve.it - Intelligence Engine')
@@ -69,13 +72,18 @@ async function createApp() {
     .build();
 
   const document = SwaggerModule.createDocument(nestApp, swaggerConfig);
+
+  expressApp.get('/docs-json', (_req, res) => {
+    res.json(document);
+  });
+
   SwaggerModule.setup('docs', nestApp, document, {
     customSiteTitle: 'Upsolve.it - Protocol Docs',
   });
 
   await nestApp.init();
-  cachedApp = app;
-  return app;
+  cachedApp = expressApp;
+  return expressApp;
 }
 
 export default async function handler(req: any, res: any) {
