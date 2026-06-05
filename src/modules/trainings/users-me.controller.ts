@@ -18,8 +18,14 @@ export class UsersMeController {
   ) {}
 
   @Get('me/streaks')
-  async streaks(@Headers('authorization') authorization: string | undefined, @Req() req: any) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+  async streaks(
+    @Headers('authorization') authorization: string | undefined,
+    @Req() req: any,
+  ) {
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.userStats.getStreakPayload(String(user._id));
   }
@@ -29,7 +35,10 @@ export class UsersMeController {
     @Headers('authorization') authorization: string | undefined,
     @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.sessions.getWeaknesses(String(user._id));
   }

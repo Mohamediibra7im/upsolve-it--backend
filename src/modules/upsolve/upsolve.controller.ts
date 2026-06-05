@@ -21,8 +21,14 @@ export class UpsolveController {
   ) {}
 
   @Get()
-  async list(@Headers('authorization') authorization: string | undefined, @Req() req: any) {
-    const user = await this.upsolve.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+  async list(
+    @Headers('authorization') authorization: string | undefined,
+    @Req() req: any,
+  ) {
+    const user = await this.upsolve.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.upsolve.list(String(user._id));
   }
@@ -37,7 +43,10 @@ export class UpsolveController {
     @Headers('authorization') authorization: string | undefined,
     @Req() req: any,
   ) {
-    const user = await this.upsolve.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.upsolve.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.upsolve.listDismissed(String(user._id));
   }
@@ -48,7 +57,10 @@ export class UpsolveController {
     @Body() problems: any[],
     @Req() req: any,
   ) {
-    const user = await this.upsolve.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.upsolve.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     try {
       await this.upsolve.insertMany(String(user._id), problems);
@@ -74,7 +86,10 @@ export class UpsolveController {
     @Body() problems: any[],
     @Req() req: any,
   ) {
-    const user = await this.upsolve.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.upsolve.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     if (!Array.isArray(problems) || problems.length === 0) {
       throw new BadRequestException('Invalid request body');
@@ -92,7 +107,10 @@ export class UpsolveController {
     @Body() body: { contestId?: number; index?: string },
     @Req() req: any,
   ) {
-    const user = await this.upsolve.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.upsolve.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     if (!body?.contestId || !body?.index) {
       throw new BadRequestException('Missing contestId or index');

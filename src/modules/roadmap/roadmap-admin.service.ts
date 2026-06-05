@@ -229,7 +229,8 @@ export class RoadmapAdminService {
     if (dto.description !== undefined) doc.description = dto.description;
     if (dto.isPublished !== undefined) doc.isPublished = dto.isPublished;
     if (dto.visibility !== undefined) doc.visibility = dto.visibility;
-    if (dto.allowedUserIds !== undefined) doc.allowedUserIds = dto.allowedUserIds;
+    if (dto.allowedUserIds !== undefined)
+      doc.allowedUserIds = dto.allowedUserIds;
     if (dto.videoUnlockSheetPct !== undefined) {
       doc.videoUnlockSheetPct = dto.videoUnlockSheetPct;
     }
@@ -611,8 +612,7 @@ export class RoadmapAdminService {
       sheetId: id,
     });
 
-    const defaultXp =
-      (await this.getXpPerAcceptedProblem(sheet.topicId)) ?? 10;
+    const defaultXp = (await this.getXpPerAcceptedProblem(sheet.topicId)) ?? 10;
 
     const docs: Array<{
       sheetId: Types.ObjectId;
@@ -651,7 +651,11 @@ export class RoadmapAdminService {
       );
     }
 
-    return { ok: true, inserted: inserted.length, skipped: dtos.length - inserted.length };
+    return {
+      ok: true,
+      inserted: inserted.length,
+      skipped: dtos.length - inserted.length,
+    };
   }
 
   async reorderProblemOnly(problemId: string, orderIndex: number) {

@@ -15,10 +15,7 @@ import {
   RoadmapLevel,
   RoadmapLevelSchema,
 } from '../roadmap/schemas/roadmap-level.schema';
-import {
-  UserXp,
-  UserXpSchema,
-} from '../roadmap/schemas/user-xp.schema';
+import { UserXp, UserXpSchema } from '../roadmap/schemas/user-xp.schema';
 import {
   UserLevelProgress,
   UserLevelProgressSchema,

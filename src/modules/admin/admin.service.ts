@@ -24,10 +24,7 @@ import {
   RoadmapLevel,
   type RoadmapLevelDocument,
 } from '../roadmap/schemas/roadmap-level.schema';
-import {
-  UserXp,
-  type UserXpDocument,
-} from '../roadmap/schemas/user-xp.schema';
+import { UserXp, type UserXpDocument } from '../roadmap/schemas/user-xp.schema';
 import {
   UserLevelProgress,
   type UserLevelProgressDocument,
@@ -379,7 +376,10 @@ export class AdminService {
       regularUsers: Math.max(totalUsers - adminUsers, 0),
       recentlyJoinedUsers: userTotals.recentlyJoinedUsers ?? 0,
       verifiedUsers: userTotals.verifiedUsers ?? 0,
-      unverifiedUsers: Math.max(totalUsers - (userTotals.verifiedUsers ?? 0), 0),
+      unverifiedUsers: Math.max(
+        totalUsers - (userTotals.verifiedUsers ?? 0),
+        0,
+      ),
       activeUsers: activeUserIds.size,
       averageRating: Math.round(Number(userTotals.averageRating) || 0),
       totalTrainings: trainingTotals.totalTrainings ?? 0,

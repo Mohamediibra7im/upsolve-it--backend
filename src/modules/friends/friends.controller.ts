@@ -29,7 +29,10 @@ export class FriendsController {
     @Headers('authorization') authorization: string | undefined,
     @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.listRequests(String(user._id));
   }
@@ -40,7 +43,10 @@ export class FriendsController {
     @Body() body: AddFriendDto,
     @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.sendRequest(
       String(user._id),
@@ -54,7 +60,10 @@ export class FriendsController {
     @Param('requestId') requestId: string,
     @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.acceptRequest(String(user._id), requestId);
   }
@@ -65,7 +74,10 @@ export class FriendsController {
     @Param('requestId') requestId: string,
     @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.declineRequest(String(user._id), requestId);
   }
@@ -76,7 +88,10 @@ export class FriendsController {
     @Param('requestId') requestId: string,
     @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.cancelOutgoingRequest(
       String(user._id),
@@ -85,8 +100,14 @@ export class FriendsController {
   }
 
   @Get()
-  async list(@Headers('authorization') authorization: string | undefined, @Req() req: any) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+  async list(
+    @Headers('authorization') authorization: string | undefined,
+    @Req() req: any,
+  ) {
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.listFriends(String(user._id));
   }
@@ -97,7 +118,10 @@ export class FriendsController {
     @Param('userId') friendUserId: string,
     @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.getFriendStats(String(user._id), friendUserId);
   }
@@ -108,7 +132,10 @@ export class FriendsController {
     @Param('userId') friendUserId: string,
     @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.removeFriend(String(user._id), friendUserId);
   }

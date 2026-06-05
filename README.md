@@ -7,10 +7,12 @@
 
 ## 🛠️ Core Infrastructure
 
-- **Framework**: NestJS (Node.js)
+- **Framework**: NestJS 11 (Node.js)
 - **Database**: MongoDB (via Mongoose)
 - **Authentication**: JWT (JSON Web Tokens) with Passport strategy + automatic token refresh
 - **Communication**: Nodemailer (SMTP) for Signal Support processing
+- **Validation**: Zod for environment variables, class-validator for DTOs
+- **Logging**: Pino with structured JSON output
 
 ### 🛰️ API Documentation (Swagger)
 
@@ -66,7 +68,39 @@ Tactical broadcast system for community announcements and maintenance alerts.
 ### 10. Audit Logging
 Real-time tracking of administrative actions and system anomalies for high-fidelity security monitoring.
 
+### 11. Health Checks
+Kubernetes-ready health endpoints for monitoring and load balancers.
+
+- **Endpoints**: `GET /api/health`, `GET /api/health/ready`, `GET /api/health/live`
+
+## Infrastructure Features
+
+- **Per-endpoint Rate Limiting**: Configurable rate limits for auth (5/15min), registration (3/hr), contact (3/hr)
+- **Request Logging**: Structured logs with request IDs, method, URL, status code, and duration
+- **Global Exception Filter**: Sanitized error responses in production mode
+- **Environment Validation**: Zod-based schema validation at startup
+
 ## 🚀 Deployment Protocol
+
+### Rate Limiting
+
+Per-endpoint rate limits are enforced via in-memory tracking:
+
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| `POST /api/auth/login` | 5 requests | 15 minutes |
+| `POST /api/auth/register` | 3 requests | 1 hour |
+| `POST /api/auth/refresh` | 10 requests | 15 minutes |
+| `POST /api/auth/generate-verification-code` | 3 requests | 1 hour |
+| `POST /api/auth/verify-codeforces-profile` | 5 requests | 1 hour |
+| `POST /api/contact` | 3 requests | 1 hour |
+| `POST /api/friends/requests` | 10 requests | 1 hour |
+| `POST /api/trainings/start` | 20 requests | 1 hour |
+| `POST /api/upsolve` | 30 requests | 1 hour |
+
+Rate limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`) are included in all responses. When exceeded, a `429 Too Many Requests` is returned with a `Retry-After` header.
+
+## Environment Setup
 
 1. **Environment Setup**:
    Create `.env`:
@@ -89,6 +123,15 @@ Real-time tracking of administrative actions and system anomalies for high-fidel
 ## 🔧 Scripts
 
 - `scripts/award-verification-xp.js` — Migration script to retroactively award verification XP to existing verified users.
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run start:dev` | Start development server |
+| `npm run build` | Production build |
+| `npm run start:prod` | Start production server |
+| `npm run lint` | Run ESLint |
 
 ## 📂 API Structure
 

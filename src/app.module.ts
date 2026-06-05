@@ -1,6 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { LoggerModule } from 'nestjs-pino';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -13,6 +15,9 @@ import { TrainingLevelsModule } from './modules/training-levels/training-levels.
 import { FriendsModule } from './modules/friends/friends.module';
 import { RoadmapModule } from './modules/roadmap/roadmap.module';
 import { WhatsNewModule } from './modules/whats-new/whats-new.module';
+import { HealthModule } from './modules/health/health.module';
+import { LoggingMiddleware } from './common/middleware/logging.middleware';
+import { RateLimiterGuard } from './common/guards/rate-limiter.guard';
 
 @Module({
   imports: [
@@ -37,6 +42,44 @@ import { WhatsNewModule } from './modules/whats-new/whats-new.module';
         return { uri };
       },
     }),
+    LoggerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        return {
+          pinoHttp: {
+            level: config.get<string>('LOG_LEVEL') ?? 'info',
+            transport:
+              process.env.NODE_ENV !== 'production'
+                ? {
+                    target: 'pino-pretty',
+                    options: {
+                      singleLine: true,
+                      colorize: true,
+                    },
+                  }
+                : undefined,
+            serializers: {
+              req: (req) => {
+                return {
+                  id: req.id,
+                  method: req.method,
+                  url: req.url,
+                  query: req.query,
+                  params: req.params,
+                  headers: req.headers,
+                };
+              },
+              res: (res) => {
+                return {
+                  statusCode: res.statusCode,
+                };
+              },
+            },
+          },
+        };
+      },
+    }),
     AuthModule,
     TrainingsModule,
     UpsolveModule,
@@ -47,8 +90,19 @@ import { WhatsNewModule } from './modules/whats-new/whats-new.module';
     FriendsModule,
     RoadmapModule,
     WhatsNewModule,
+    HealthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: RateLimiterGuard,
+    },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(LoggingMiddleware).forRoutes('*');
+  }
+}

@@ -21,7 +21,10 @@ export class TrainingsController {
     @Body() body: any,
     @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     const training = await this.trainings.createTraining(
       String(user._id),
@@ -31,8 +34,14 @@ export class TrainingsController {
   }
 
   @Get()
-  async list(@Headers('authorization') authorization: string | undefined, @Req() req: any) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+  async list(
+    @Headers('authorization') authorization: string | undefined,
+    @Req() req: any,
+  ) {
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.trainings.listTrainings(String(user._id));
   }
@@ -43,7 +52,10 @@ export class TrainingsController {
     @Param('id') id: string,
     @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(authorization, req.cookies?.accessToken);
+    const user = await this.trainings.getUserFromAuthHeader(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.trainings.deleteTraining(String(user._id), id);
   }

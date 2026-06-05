@@ -33,7 +33,10 @@ export class RoadmapAdminController {
   ) {}
 
   @Get('levels')
-  async listLevels(@Headers('authorization') authorization?: string, @Req() req?: any) {
+  async listLevels(
+    @Headers('authorization') authorization?: string,
+    @Req() req?: any,
+  ) {
     await this.admin.requireAdmin(authorization, req?.cookies?.accessToken);
     const levels = await this.roadmap.listLevels();
     return { levels };
@@ -45,7 +48,10 @@ export class RoadmapAdminController {
     @Body() body: CreateLevelDto,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     const level = await this.roadmap.createLevel(body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -60,7 +66,10 @@ export class RoadmapAdminController {
     @Body() body: UpdateLevelDto,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     const level = await this.roadmap.updateLevel(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -74,7 +83,10 @@ export class RoadmapAdminController {
     @Param('id') id: string,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.roadmap.deleteLevel(id, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -99,7 +111,10 @@ export class RoadmapAdminController {
     @Body() body: CreateTopicDto,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     const topic = await this.roadmap.createTopic(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -114,7 +129,10 @@ export class RoadmapAdminController {
     @Body() body: UpdateTopicDto,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     const topic = await this.roadmap.updateTopic(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -140,7 +158,10 @@ export class RoadmapAdminController {
     @Param('id') id: string,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.roadmap.deleteTopic(id, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -154,7 +175,10 @@ export class RoadmapAdminController {
     @Body() body: UpsertVideoDto,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     const video = await this.roadmap.upsertVideo(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -168,7 +192,10 @@ export class RoadmapAdminController {
     @Param('id') id: string,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.roadmap.deleteVideo(id, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -182,7 +209,10 @@ export class RoadmapAdminController {
     @Body() body: UpsertSheetDto,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     const sheet = await this.roadmap.upsertSheet(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -197,7 +227,10 @@ export class RoadmapAdminController {
     @Body() body: CreateProblemDto,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     const problem = await this.roadmap.addProblem(id, body, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -212,7 +245,10 @@ export class RoadmapAdminController {
     @Body() body: BulkAddProblemsDto,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.roadmap.addProblems(id, body.problems, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -237,7 +273,10 @@ export class RoadmapAdminController {
     @Param('id') id: string,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.roadmap.deleteProblem(id, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -250,7 +289,10 @@ export class RoadmapAdminController {
     @Body() body: DeleteProblemsDto,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.roadmap.deleteProblems(body.problemIds, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',

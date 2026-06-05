@@ -22,13 +22,19 @@ export class AdminController {
   ) {}
 
   @Get('stats')
-  async stats(@Headers('authorization') authorization?: string, @Req() req?: any) {
+  async stats(
+    @Headers('authorization') authorization?: string,
+    @Req() req?: any,
+  ) {
     await this.admin.requireAdmin(authorization, req?.cookies?.accessToken);
     return await this.admin.stats();
   }
 
   @Get('users')
-  async users(@Headers('authorization') authorization?: string, @Req() req?: any) {
+  async users(
+    @Headers('authorization') authorization?: string,
+    @Req() req?: any,
+  ) {
     await this.admin.requireAdmin(authorization, req?.cookies?.accessToken);
     return await this.admin.listUsers();
   }
@@ -39,7 +45,10 @@ export class AdminController {
     @Body() body: { userId: string; role: 'admin' | 'user' },
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.admin.updateUserRole(
       String(current._id),
       body.userId,
@@ -63,7 +72,10 @@ export class AdminController {
     @Param('userId') userId: string,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.admin.syncUserRating(String(current._id), userId);
   }
 
@@ -73,7 +85,10 @@ export class AdminController {
     @Body() body: { userIds: string[] },
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.admin.syncBatchUserRatings(
       String(current._id),
       body.userIds,
@@ -86,7 +101,10 @@ export class AdminController {
     @Body() body: ReplaceLevelsBodyDto,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.trainingLevels.replaceAll(body.levels, {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -99,7 +117,10 @@ export class AdminController {
     @Headers('authorization') authorization: string | undefined,
     @Req() req: any,
   ) {
-    const current = await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.trainingLevels.reseedFromSeedFile({
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',

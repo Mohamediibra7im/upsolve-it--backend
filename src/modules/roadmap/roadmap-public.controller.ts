@@ -21,8 +21,14 @@ export class RoadmapPublicController {
   ) {}
 
   @Get('levels')
-  async listLevels(@Headers('authorization') authorization?: string, @Req() req?: any) {
-    const userId = await this.roadmap.resolveUserId(authorization, req?.cookies?.accessToken);
+  async listLevels(
+    @Headers('authorization') authorization?: string,
+    @Req() req?: any,
+  ) {
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req?.cookies?.accessToken,
+    );
     const levels = await this.roadmap.listLevels(userId);
     return { levels };
   }
@@ -37,15 +43,27 @@ export class RoadmapPublicController {
   }
 
   @Get('user/summary')
-  async getUserSummary(@Headers('authorization') authorization?: string, @Req() req?: any) {
-    const userId = await this.roadmap.resolveUserId(authorization, req?.cookies?.accessToken);
+  async getUserSummary(
+    @Headers('authorization') authorization?: string,
+    @Req() req?: any,
+  ) {
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req?.cookies?.accessToken,
+    );
     if (!userId) throw new UnauthorizedException('Unauthorized');
     return await this.progress.getUserSummary(userId);
   }
 
   @Get('user/activity')
-  async getUserActivity(@Headers('authorization') authorization?: string, @Req() req?: any) {
-    const userId = await this.roadmap.resolveUserId(authorization, req?.cookies?.accessToken);
+  async getUserActivity(
+    @Headers('authorization') authorization?: string,
+    @Req() req?: any,
+  ) {
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req?.cookies?.accessToken,
+    );
     if (!userId) throw new UnauthorizedException('Unauthorized');
     return await this.progress.getUserActivity(userId);
   }
@@ -56,7 +74,10 @@ export class RoadmapPublicController {
     @Param('id') id: string,
     @Req() req: any,
   ) {
-    const userId = await this.roadmap.resolveUserId(authorization, req.cookies?.accessToken);
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.roadmap.getLevelDetail(id, userId);
   }
 
@@ -67,7 +88,10 @@ export class RoadmapPublicController {
     @Param('topicId') topicId: string,
     @Req() req: any,
   ) {
-    const userId = await this.roadmap.resolveUserId(authorization, req.cookies?.accessToken);
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req.cookies?.accessToken,
+    );
     return await this.roadmap.getTopicDetail(id, topicId, userId);
   }
 
@@ -78,7 +102,10 @@ export class RoadmapPublicController {
     @Body() body: UpdateVideoProgressDto,
     @Req() req: any,
   ) {
-    const userId = await this.roadmap.resolveUserId(authorization, req.cookies?.accessToken);
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!userId) throw new UnauthorizedException('Unauthorized');
     return await this.progress.recordVideoProgress(userId, videoId, body);
   }
@@ -89,7 +116,10 @@ export class RoadmapPublicController {
     @Param('sheetId') sheetId: string,
     @Req() req: any,
   ) {
-    const userId = await this.roadmap.resolveUserId(authorization, req.cookies?.accessToken);
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!userId) throw new UnauthorizedException('Unauthorized');
     return await this.progress.syncSheet(userId, sheetId);
   }
@@ -101,7 +131,10 @@ export class RoadmapPublicController {
     @Body() body: { solved: boolean },
     @Req() req: any,
   ) {
-    const userId = await this.roadmap.resolveUserId(authorization, req.cookies?.accessToken);
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req.cookies?.accessToken,
+    );
     if (!userId) throw new UnauthorizedException('Unauthorized');
     return await this.progress.toggleProblemSolved(
       userId,

@@ -211,7 +211,8 @@ export class RoadmapPublicService {
     if (level.visibility === 'specific_users') {
       const isAdmin = await this.isUserAdmin(userId);
       if (!isAdmin) {
-        const hasAccess = userId && level.allowedUserIds?.some((id) => String(id) === userId);
+        const hasAccess =
+          userId && level.allowedUserIds?.some((id) => String(id) === userId);
         if (!hasAccess) throw new NotFoundException('Level not found');
       }
     }
@@ -313,7 +314,8 @@ export class RoadmapPublicService {
     if (level.visibility === 'specific_users') {
       const isAdmin = await this.isUserAdmin(userId);
       if (!isAdmin) {
-        const hasAccess = userId && level.allowedUserIds?.some((id) => String(id) === userId);
+        const hasAccess =
+          userId && level.allowedUserIds?.some((id) => String(id) === userId);
         if (!hasAccess) throw new NotFoundException('Level not found');
       }
     }

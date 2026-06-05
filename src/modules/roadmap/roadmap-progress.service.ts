@@ -781,14 +781,20 @@ export class RoadmapProgressService {
     return { problemDates, topicDates };
   }
 
-  async getLeaderboard(query: { level?: string; period?: string; limit?: string }) {
+  async getLeaderboard(query: {
+    level?: string;
+    period?: string;
+    limit?: string;
+  }) {
     const levelStr =
       query.level && query.level !== 'undefined' && query.level !== 'null'
         ? query.level
         : null;
     const levelId = levelStr ? this.toObjectId(levelStr, 'Level') : null;
     const period = query.period ?? 'all';
-    const limit = query.limit ? Math.min(parseInt(query.limit, 10) || 200, 200) : 200;
+    const limit = query.limit
+      ? Math.min(parseInt(query.limit, 10) || 200, 200)
+      : 200;
     const now = Date.now();
     const since =
       period === 'weekly'

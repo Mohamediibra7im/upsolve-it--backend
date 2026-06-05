@@ -4,12 +4,17 @@ import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
+import { validateEnv } from './config/env.validation';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = app.get(Logger);
 
   const config = app.get(ConfigService);
+  validateEnv(config);
   const port = Number(config.get<string>('PORT') ?? 3000);
   const frontendOrigin =
     config.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:3001';
@@ -22,6 +27,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  app.useGlobalFilters(new HttpExceptionFilter());
   const allowedOrigins = [
     frontendOrigin,
     'http://localhost:3000',
@@ -30,7 +36,7 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.some((o) => origin.startsWith(o))) {
+      if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -58,7 +64,9 @@ async function bootstrap() {
   });
 
   await app.listen(port);
+  logger.log(`Application is running on: http://localhost:${port}`);
 }
+
 bootstrap().catch((err) => {
   console.error(err);
   process.exit(1);
