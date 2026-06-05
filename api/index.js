@@ -2,7 +2,6 @@ const express = require('express');
 const { NestFactory } = require('@nestjs/core');
 const { ExpressAdapter } = require('@nestjs/platform-express');
 const { ValidationPipe } = require('@nestjs/common');
-const { ConfigService } = require('@nestjs/config');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const { DocumentBuilder, SwaggerModule } = require('@nestjs/swagger');
@@ -19,10 +18,10 @@ async function bootstrap() {
   const adapter = new ExpressAdapter(expressApp);
 
   const nestApp = await NestFactory.create(AppModule, adapter, {
-    logger: ['error', 'warn', 'log'],
+    logger: false,
   });
 
-  const config = nestApp.get(ConfigService);
+  const config = nestApp.get('ConfigService');
 
   nestApp.use(helmet({ contentSecurityPolicy: false }));
   nestApp.use(cookieParser());
@@ -47,7 +46,6 @@ async function bootstrap() {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.warn(`CORS blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -78,16 +76,6 @@ async function bootstrap() {
 }
 
 module.exports = async function handler(req, res) {
-  try {
-    const app = await bootstrap();
-    return app(req, res);
-  } catch (err) {
-    console.error('Vercel handler bootstrap error:', err);
-    res.status(500).json({
-      statusCode: 500,
-      message: 'A server error has occurred',
-      error: 'Internal Server Error',
-    });
-  }
+  const app = await bootstrap();
+  return app(req, res);
 };
-

@@ -51,20 +51,13 @@ import { RateLimiterGuard } from './common/guards/rate-limiter.guard';
             level: config.get<string>('LOG_LEVEL') ?? 'info',
             transport:
               process.env.NODE_ENV !== 'production'
-                ? (() => {
-                    try {
-                      require.resolve('pino-pretty');
-                      return {
-                        target: 'pino-pretty',
-                        options: {
-                          singleLine: true,
-                          colorize: true,
-                        },
-                      };
-                    } catch {
-                      return undefined;
-                    }
-                  })()
+                ? {
+                    target: 'pino-pretty',
+                    options: {
+                      singleLine: true,
+                      colorize: true,
+                    },
+                  }
                 : undefined,
             serializers: {
               req: (req) => {
