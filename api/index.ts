@@ -10,10 +10,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import express from 'express';
 
-let cachedHandler: any;
+let cachedApp: any;
 
-async function bootstrap() {
-  if (cachedHandler) return cachedHandler;
+async function createApp() {
+  if (cachedApp) return cachedApp;
 
   const expressApp = express();
   const adapter = new ExpressAdapter(expressApp);
@@ -23,11 +23,18 @@ async function bootstrap() {
   });
 
   const config = nestApp.get(ConfigService);
+  const logger = nestApp.get(Logger);
 
-  nestApp.use(helmet({ contentSecurityPolicy: false }));
+  nestApp.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }));
   nestApp.use(cookieParser());
   nestApp.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, transform: true }),
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+    }),
   );
   nestApp.useGlobalFilters(new HttpExceptionFilter());
 
@@ -43,43 +50,43 @@ async function bootstrap() {
   ].filter(Boolean);
 
   nestApp.enableCors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void,
-    ) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        logger.warn(`CORS blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
   });
 
-  nestApp.setGlobalPrefix('api', { exclude: ['/', '/docs', '/docs-json'] });
+  nestApp.setGlobalPrefix('api', { exclude: ['/docs', '/docs-json', '/'] });
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Upsolve.it - Intelligence Engine')
-    .setDescription(
-      'The scalable intelligence engine powering the Upsolve.it tactical platform.',
-    )
+    .setDescription('The scalable intelligence engine powering the Upsolve.it tactical platform.')
     .setVersion('2.0')
     .addTag('Intelligence')
     .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(nestApp, swaggerConfig);
+
+  expressApp.get('/docs-json', (_req, res) => {
+    res.json(document);
+  });
+
   SwaggerModule.setup('docs', nestApp, document, {
     customSiteTitle: 'Upsolve.it - Protocol Docs',
   });
 
   await nestApp.init();
-
-  cachedHandler = expressApp;
+  cachedApp = expressApp;
   return expressApp;
 }
 
 export default async function handler(req: any, res: any) {
-  const app = await bootstrap();
+  const app = await createApp();
   return app(req, res);
 }
