@@ -20,8 +20,20 @@ export class RoadmapTopic {
   @Prop({ type: [String], default: [] })
   subtopics!: string[];
 
-  @Prop({ default: 50 })
-  xpVideoReward!: number;
+  @Prop({ default: 80 })
+  requiredLearningPct!: number;
+
+  @Prop({ default: 60 })
+  requiredProblemPct!: number;
+
+  @Prop({ default: 100 })
+  topicXpReward!: number;
+
+  @Prop({ default: '' })
+  groupLinks!: string;
+
+  @Prop({ default: '' })
+  groupNote!: string;
 }
 
 export const RoadmapTopicSchema = SchemaFactory.createForClass(RoadmapTopic);

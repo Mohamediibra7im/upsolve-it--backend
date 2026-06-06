@@ -12,21 +12,17 @@ import {
   RoadmapTopicDocument,
 } from './schemas/roadmap-topic.schema';
 import {
-  RoadmapVideo,
-  RoadmapVideoDocument,
-} from './schemas/roadmap-video.schema';
-import {
-  RoadmapSheet,
-  RoadmapSheetDocument,
-} from './schemas/roadmap-sheet.schema';
+  RoadmapResource,
+  RoadmapResourceDocument,
+} from './schemas/roadmap-resource.schema';
 import {
   RoadmapProblem,
   RoadmapProblemDocument,
 } from './schemas/roadmap-problem.schema';
 import {
-  UserVideoProgress,
-  UserVideoProgressDocument,
-} from './schemas/user-video-progress.schema';
+  UserResourceProgress,
+  UserResourceProgressDocument,
+} from './schemas/user-resource-progress.schema';
 import {
   UserProblemProgress,
   UserProblemProgressDocument,
@@ -35,14 +31,11 @@ import {
   UserTopicProgress,
   UserTopicProgressDocument,
 } from './schemas/user-topic-progress.schema';
-import { UpdateVideoProgressDto } from './dto/update-video-progress.dto';
 
-export type VideoProgressSnapshot = {
-  videoPct: number;
-  sheetUnlocked: boolean;
-  lastPositionSec: number;
-  sheetPct: number;
-  sheetUnlockedNext: boolean;
+export type TopicProgressSnapshot = {
+  learningPct: number;
+  problemPct: number;
+  isComplete: boolean;
 };
 
 @Injectable()
@@ -53,14 +46,12 @@ export class RoadmapPublicService {
     private readonly levelModel: Model<RoadmapLevelDocument>,
     @InjectModel(RoadmapTopic.name)
     private readonly topicModel: Model<RoadmapTopicDocument>,
-    @InjectModel(RoadmapVideo.name)
-    private readonly videoModel: Model<RoadmapVideoDocument>,
-    @InjectModel(RoadmapSheet.name)
-    private readonly sheetModel: Model<RoadmapSheetDocument>,
+    @InjectModel(RoadmapResource.name)
+    private readonly resourceModel: Model<RoadmapResourceDocument>,
     @InjectModel(RoadmapProblem.name)
     private readonly problemModel: Model<RoadmapProblemDocument>,
-    @InjectModel(UserVideoProgress.name)
-    private readonly videoProgressModel: Model<UserVideoProgressDocument>,
+    @InjectModel(UserResourceProgress.name)
+    private readonly resourceProgressModel: Model<UserResourceProgressDocument>,
     @InjectModel(UserProblemProgress.name)
     private readonly problemProgressModel: Model<UserProblemProgressDocument>,
     @InjectModel(UserTopicProgress.name)
@@ -75,8 +66,12 @@ export class RoadmapPublicService {
   ): Promise<string | null> {
     const token = authHeader?.replace('Bearer ', '') ?? accessTokenCookie ?? '';
     if (!token) return null;
-    const decoded = await this.auth.verifyAccessToken(token);
-    return decoded?.userId ?? null;
+    try {
+      const decoded = await this.auth.verifyAccessToken(token);
+      return decoded?.userId ?? null;
+    } catch {
+      return null;
+    }
   }
 
   private async isUserAdmin(userId: string | null): Promise<boolean> {
@@ -95,27 +90,9 @@ export class RoadmapPublicService {
   private async progressByTopic(
     userId: string | null,
     topicIds: Types.ObjectId[],
-  ): Promise<Map<string, VideoProgressSnapshot>> {
-    if (!userId || topicIds.length === 0) return new Map();
-
-    const videos = await this.videoModel
-      .find({ topicId: { $in: topicIds } })
-      .select('_id topicId')
-      .lean();
-
-    if (!videos.length) return new Map();
-
-    const videoIds = videos.map((v) => v._id);
-    const videoToTopic = new Map(
-      videos.map((v) => [String(v._id), String(v.topicId)]),
-    );
-
-    const progressDocs = await this.videoProgressModel
-      .find({
-        userId: new Types.ObjectId(userId),
-        videoId: { $in: videoIds },
-      })
-      .lean();
+  ): Promise<Map<string, TopicProgressSnapshot>> {
+    const map = new Map<string, TopicProgressSnapshot>();
+    if (!userId || topicIds.length === 0) return map;
 
     const topicProgressDocs = await this.topicProgressModel
       .find({
@@ -128,17 +105,12 @@ export class RoadmapPublicService {
       topicProgressDocs.map((tp) => [String(tp.topicId), tp]),
     );
 
-    const map = new Map<string, VideoProgressSnapshot>();
-    for (const p of progressDocs) {
-      const topicId = videoToTopic.get(String(p.videoId));
-      if (!topicId) continue;
-      const topicProgress = topicProgressMap.get(topicId);
-      map.set(topicId, {
-        videoPct: p.watchPct ?? 0,
-        sheetUnlocked: Boolean(p.isThresholdMet),
-        lastPositionSec: p.lastPositionSec ?? 0,
-        sheetPct: topicProgress?.sheetPct ?? 0,
-        sheetUnlockedNext: Boolean(topicProgress?.sheetUnlockedNext),
+    for (const tId of topicIds) {
+      const tp = topicProgressMap.get(String(tId));
+      map.set(String(tId), {
+        learningPct: tp?.learningPct ?? 0,
+        problemPct: tp?.problemPct ?? 0,
+        isComplete: tp?.isTopicComplete ?? false,
       });
     }
 
@@ -177,28 +149,28 @@ export class RoadmapPublicService {
 
     const topics = await this.topicModel
       .find({ levelId: { $in: levelIds } })
-      .select('_id levelId')
+      .select('_id levelId orderIndex')
       .lean();
     const progress = await this.progressByTopic(
       userId,
       topics.map((t) => t._id),
     );
 
-    const unlockedCountByLevel = new Map<string, number>();
+    const completedCountByLevel = new Map<string, number>();
     for (const t of topics) {
       const p = progress.get(String(t._id));
-      if (!p?.sheetUnlocked || !p?.sheetUnlockedNext) continue;
+      if (!p?.isComplete) continue;
       const levelKey = String(t.levelId);
-      unlockedCountByLevel.set(
+      completedCountByLevel.set(
         levelKey,
-        (unlockedCountByLevel.get(levelKey) ?? 0) + 1,
+        (completedCountByLevel.get(levelKey) ?? 0) + 1,
       );
     }
 
     return visibleLevels.map((l) => ({
       ...l,
       topicsCount: countMap.get(String(l._id)) ?? 0,
-      topicsUnlockedCount: unlockedCountByLevel.get(String(l._id)) ?? 0,
+      topicsUnlockedCount: completedCountByLevel.get(String(l._id)) ?? 0, // In user listing, show completed topics count
     }));
   }
 
@@ -225,64 +197,39 @@ export class RoadmapPublicService {
     const topicIds = topics.map((t) => t._id);
     const progressMap = await this.progressByTopic(userId, topicIds);
 
-    const videos = topicIds.length
-      ? await this.videoModel
-          .find({ topicId: { $in: topicIds } })
-          .select('topicId')
-          .lean()
-      : [];
-    const sheets = topicIds.length
-      ? await this.sheetModel
-          .find({ topicId: { $in: topicIds } })
-          .select('_id topicId')
-          .lean()
-      : [];
-
-    const videoSet = new Set(videos.map((v) => String(v.topicId)));
-    const sheetMap = new Map(sheets.map((s) => [String(s.topicId), s._id]));
-    const sheetIds = sheets.map((s) => s._id);
-
-    const problemCounts = sheetIds.length
+    const problems = topicIds.length
       ? await this.problemModel.aggregate([
-          { $match: { sheetId: { $in: sheetIds } } },
-          { $group: { _id: '$sheetId', count: { $sum: 1 } } },
+          { $match: { topicId: { $in: topicIds } } },
+          { $group: { _id: '$topicId', count: { $sum: 1 } } },
         ])
       : [];
     const countMap = new Map(
-      problemCounts.map((c) => [String(c._id), Number(c.count)]),
+      problems.map((c) => [String(c._id), Number(c.count)]),
     );
 
     let canAccess = true;
-    let topicsUnlockedCount = 0;
+    let topicsCompletedCount = 0;
+
     const topicRows = topics.map((t) => {
-      const progress =
-        progressMap.get(String(t._id)) ??
-        ({
-          videoPct: 0,
-          sheetUnlocked: false,
-          lastPositionSec: 0,
-          sheetPct: 0,
-          sheetUnlockedNext: false,
-        } as const);
+      const progress = progressMap.get(String(t._id)) ?? {
+        learningPct: 0,
+        problemPct: 0,
+        isComplete: false,
+      };
 
       const isLocked = !canAccess;
-      const sheetUnlocked = progress.sheetUnlocked;
-      const sheetUnlockedNext = progress.sheetUnlockedNext;
-      const isComplete = false;
+      const isComplete = progress.isComplete;
 
-      if (sheetUnlocked && sheetUnlockedNext) topicsUnlockedCount += 1;
+      if (isComplete) topicsCompletedCount += 1;
 
+      // Unlocking rule: Next topic unlocks if current is completed
       if (canAccess) {
-        canAccess = sheetUnlocked && sheetUnlockedNext;
+        canAccess = isComplete;
       }
 
       return {
         ...t,
-        hasVideo: videoSet.has(String(t._id)),
-        hasSheet: sheetMap.has(String(t._id)),
-        problemsCount: sheetMap.get(String(t._id))
-          ? (countMap.get(String(sheetMap.get(String(t._id)))) ?? 0)
-          : 0,
+        problemsCount: countMap.get(String(t._id)) ?? 0,
         progress: {
           ...progress,
           isLocked,
@@ -295,7 +242,7 @@ export class RoadmapPublicService {
       level: {
         ...level,
         topicsCount: topics.length,
-        topicsUnlockedCount,
+        topicsUnlockedCount: topicsCompletedCount,
       },
       topics: topicRows,
     };
@@ -305,6 +252,7 @@ export class RoadmapPublicService {
     levelId: string,
     topicId: string,
     userId: string | null,
+    language?: 'Arabic' | 'English',
   ) {
     const level = await this.levelModel
       .findOne({ _id: this.toObjectId(levelId, 'Level'), isPublished: true })
@@ -325,107 +273,98 @@ export class RoadmapPublicService {
       .lean();
     if (!topic) throw new NotFoundException('Topic not found');
 
-    const video = await this.videoModel.findOne({ topicId: topic._id }).lean();
-    const sheet = await this.sheetModel.findOne({ topicId: topic._id }).lean();
-    const problems = sheet
-      ? await this.problemModel
-          .find({ sheetId: sheet._id })
-          .sort({ orderIndex: 1 })
-          .lean()
-      : [];
+    const allResources = await this.resourceModel
+      .find({ topicId: topic._id })
+      .sort({ orderIndex: 1 })
+      .lean();
 
-    const progressMap = await this.progressByTopic(userId, [topic._id]);
-    const basicProgress = progressMap.get(String(topic._id)) ?? {
-      videoPct: 0,
-      sheetUnlocked: false,
-      lastPositionSec: 0,
-    };
+    const resources = language
+      ? allResources.filter((r) => r.language === language)
+      : allResources;
 
+    const problems = await this.problemModel
+      .find({ topicId: topic._id })
+      .sort({ orderIndex: 1 })
+      .lean();
+
+    // Fetch user progress
+    let learningPct = 0;
+    let problemPct = 0;
+    let isTopicComplete = false;
+    const resourceProgress: Record<
+      string,
+      { watchPct: number; isCompleted: boolean; lastPositionSec: number }
+    > = {};
     const problemProgress: Record<string, boolean> = {};
-    if (userId && problems.length > 0) {
-      const solvedProblems = await this.problemProgressModel
+
+    if (userId) {
+      const userOid = new Types.ObjectId(userId);
+      const tp = await this.topicProgressModel
+        .findOne({ userId: userOid, topicId: topic._id })
+        .lean();
+      if (tp) {
+        problemPct = tp.problemPct ?? 0;
+        isTopicComplete = tp.isTopicComplete ?? false;
+      }
+
+      const resProg = await this.resourceProgressModel
         .find({
-          userId: new Types.ObjectId(userId),
+          userId: userOid,
+          resourceId: { $in: resources.map((r) => r._id) },
+        })
+        .lean();
+
+      for (const rp of resProg) {
+        resourceProgress[String(rp.resourceId)] = {
+          watchPct: rp.watchPct ?? 0,
+          isCompleted: rp.isCompleted ?? false,
+          lastPositionSec: rp.lastPositionSec ?? 0,
+        };
+      }
+
+      // Recalculate learning progress from filtered (language-specific) resources
+      let totalContribution = 0;
+      for (const res of resources) {
+        const prog = resourceProgress[String(res._id)];
+        if (!prog) continue;
+        if (res.type === 'Video') {
+          totalContribution += res.weight * ((prog.watchPct ?? 0) / 100);
+        } else {
+          if (prog.isCompleted) {
+            totalContribution += res.weight;
+          }
+        }
+      }
+      learningPct =
+        resources.length > 0
+          ? Math.min(100, Math.round(totalContribution))
+          : 100;
+
+      const probProg = await this.problemProgressModel
+        .find({
+          userId: userOid,
           problemId: { $in: problems.map((p) => p._id) },
           isSolved: true,
         })
         .lean();
-      for (const p of solvedProblems) {
-        problemProgress[String(p.problemId)] = true;
+
+      for (const pp of probProg) {
+        problemProgress[String(pp.problemId)] = true;
       }
     }
-
-    const progress = {
-      ...basicProgress,
-      problemProgress,
-    };
 
     return {
       level,
       topic,
-      video,
-      sheet,
+      resources,
       problems,
-      progress,
-    };
-  }
-
-  async updateVideoProgress(
-    userId: string,
-    videoId: string,
-    dto: UpdateVideoProgressDto,
-  ) {
-    const vid = this.toObjectId(videoId, 'Video');
-
-    const video = await this.videoModel.findById(vid).lean();
-    if (!video) throw new NotFoundException('Video not found');
-
-    const topic = await this.topicModel
-      .findById(video.topicId)
-      .select('levelId')
-      .lean();
-    if (!topic) throw new NotFoundException('Topic not found');
-
-    const level = await this.levelModel
-      .findById(topic.levelId)
-      .select('videoUnlockSheetPct')
-      .lean();
-
-    const threshold = level?.videoUnlockSheetPct ?? 80;
-
-    const existing = await this.videoProgressModel.findOne({
-      userId: new Types.ObjectId(userId),
-      videoId: vid,
-    });
-
-    const nextPct = Math.min(100, Math.max(0, dto.watchPct));
-    const watchPct = Math.max(existing?.watchPct ?? 0, nextPct);
-    const lastPositionSec = Math.max(
-      0,
-      dto.positionSec ?? existing?.lastPositionSec ?? 0,
-    );
-    const isThresholdMet = watchPct >= threshold;
-
-    const updated = await this.videoProgressModel.findOneAndUpdate(
-      { userId: new Types.ObjectId(userId), videoId: vid },
-      {
-        $set: {
-          watchPct,
-          lastPositionSec,
-          isThresholdMet,
-        },
-        $setOnInsert: {
-          xpAwarded: false,
-        },
+      progress: {
+        learningPct,
+        problemPct,
+        isTopicComplete,
+        resourceProgress,
+        problemProgress,
       },
-      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
-    );
-
-    return {
-      watchPct: updated?.watchPct ?? watchPct,
-      lastPositionSec: updated?.lastPositionSec ?? lastPositionSec,
-      sheetUnlocked: updated?.isThresholdMet ?? isThresholdMet,
-      threshold,
     };
   }
 }

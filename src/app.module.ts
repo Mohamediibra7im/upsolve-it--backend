@@ -67,7 +67,11 @@ import { RateLimiterGuard } from './common/guards/rate-limiter.guard';
                   url: req.url,
                   query: req.query,
                   params: req.params,
-                  headers: req.headers,
+                  headers: {
+                    'content-type': req.headers['content-type'],
+                    'user-agent': req.headers['user-agent'],
+                    'x-request-id': req.headers['x-request-id'],
+                  },
                 };
               },
               res: (res) => {

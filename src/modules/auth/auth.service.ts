@@ -138,16 +138,6 @@ export class AuthService {
     password: string,
     confirmPassword: string,
   ) {
-    const existing = await this.userModel.findOne({
-      codeforcesHandle: {
-        $regex: new RegExp(
-          `^${codeforcesHandle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
-          'i',
-        ),
-      },
-    });
-    if (existing) throw new BadRequestException('Handle already exists');
-
     if (!codeforcesHandle || !password || !confirmPassword) {
       throw new BadRequestException(
         'Codeforces handle, password, and password confirmation are required',
@@ -162,8 +152,19 @@ export class AuthService {
       throw new BadRequestException('Passwords do not match');
     }
 
+    const existing = await this.userModel.findOne({
+      codeforcesHandle: {
+        $regex: new RegExp(
+          `^${codeforcesHandle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+          'i',
+        ),
+      },
+    });
+    if (existing) throw new BadRequestException('Handle already exists');
+
     const res = await fetch(
       `https://codeforces.com/api/user.info?handles=${encodeURIComponent(codeforcesHandle)}`,
+      { signal: AbortSignal.timeout(8000) },
     );
     const data = await res.json();
     if (data?.status !== 'OK' || !data.result?.[0]) {
@@ -211,10 +212,8 @@ export class AuthService {
     }
 
     const user = await this.userModel.findOne({ codeforcesHandle });
-    if (!user) throw new UnauthorizedException('Wrong Handle');
-
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) throw new UnauthorizedException('Wrong Password');
+    const ok = user ? await bcrypt.compare(password, user.password) : false;
+    if (!user || !ok) throw new UnauthorizedException('Invalid credentials');
 
     await this.auditLogs.logAction(
       'LOGIN',
@@ -246,7 +245,12 @@ export class AuthService {
       throw new BadRequestException('Verification token is required');
     }
 
-    const decoded = await this.jwt.verifyAsync(verificationToken);
+    let decoded: { userId?: string; handle?: string; iat?: number };
+    try {
+      decoded = await this.jwt.verifyAsync(verificationToken);
+    } catch {
+      throw new BadRequestException('Invalid or expired verification token');
+    }
 
     const handle = String(decoded.handle ?? '');
     const iat = Number(decoded.iat ?? 0);
@@ -254,7 +258,9 @@ export class AuthService {
       handle,
     )}&from=1&count=10`;
 
-    const submissionsRes = await fetch(submissionsUrl);
+    const submissionsRes = await fetch(submissionsUrl, {
+      signal: AbortSignal.timeout(8000),
+    });
     const submissionsData = await submissionsRes.json();
     if (submissionsData?.status !== 'OK') {
       throw new BadRequestException(
@@ -302,7 +308,12 @@ export class AuthService {
         throw new BadRequestException(passwordValidation.errors.join('. '));
       }
 
-      const decoded = await this.jwt.verifyAsync(body.resetToken);
+      let decoded: { userId?: string };
+      try {
+        decoded = await this.jwt.verifyAsync(body.resetToken);
+      } catch {
+        throw new BadRequestException('Invalid or expired reset token');
+      }
 
       const user = await this.userModel.findById(decoded.userId);
       if (!user) throw new BadRequestException('User not found');
@@ -379,6 +390,7 @@ export class AuthService {
       `https://codeforces.com/api/user.info?handles=${encodeURIComponent(
         user.codeforcesHandle,
       )}`,
+      { signal: AbortSignal.timeout(8000) },
     );
     const data = await res.json();
     if (data?.status !== 'OK' || !data.result?.[0]) {
@@ -571,6 +583,7 @@ export class AuthService {
 
     const res = await fetch(
       `https://codeforces.com/api/user.info?handles=${encodeURIComponent(user.codeforcesHandle)}`,
+      { signal: AbortSignal.timeout(8000) },
     );
     const data = await res.json();
     if (data?.status !== 'OK' || !data.result?.[0]) {

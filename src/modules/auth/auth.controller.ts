@@ -12,6 +12,9 @@ import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { InitiateResetDto } from './dto/initiate-reset.dto';
+import { VerifySubmissionDto } from './dto/verify-submission.dto';
+import { ResetPinDto } from './dto/reset-pin.dto';
 
 type RequestWithCookies = Request & {
   cookies?: { refreshToken?: string; accessToken?: string };
@@ -100,23 +103,24 @@ export class AuthController {
   }
 
   @Post('initiate-reset')
-  async initiateReset(@Body() body: { handle?: string }) {
-    return await this.auth.initiateReset(body.handle ?? '');
+  async initiateReset(@Body() dto: InitiateResetDto) {
+    return await this.auth.initiateReset(dto.handle);
   }
 
   @Post('verify-submission')
-  async verifySubmission(@Body() body: { verificationToken?: string }) {
-    return await this.auth.verifySubmission(body.verificationToken ?? '');
+  async verifySubmission(@Body() dto: VerifySubmissionDto) {
+    return await this.auth.verifySubmission(dto.verificationToken);
   }
 
   @Post('reset-pin')
-  async resetPin(@Req() req: RequestWithCookies, @Body() body: any) {
+  async resetPin(@Req() req: RequestWithCookies, @Body() dto: ResetPinDto) {
     const accessToken =
-      req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
+      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
+      req.cookies?.accessToken;
     return await this.auth.resetPin({
-      resetToken: body?.resetToken,
-      newPassword: body?.newPassword,
-      oldPassword: body?.oldPassword,
+      resetToken: dto.resetToken,
+      newPassword: dto.newPassword,
+      oldPassword: dto.oldPassword,
       accessToken,
     });
   }
@@ -124,7 +128,8 @@ export class AuthController {
   @Post('sync-profile')
   async syncProfile(@Req() req: RequestWithCookies) {
     const token =
-      req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
+      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
+      req.cookies?.accessToken;
     if (!token) throw new UnauthorizedException('Unauthorized');
     return await this.auth.syncProfile(token);
   }
@@ -132,7 +137,8 @@ export class AuthController {
   @Post('generate-verification-code')
   async generateVerificationCode(@Req() req: RequestWithCookies) {
     const token =
-      req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
+      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
+      req.cookies?.accessToken;
     if (!token) throw new UnauthorizedException('Unauthorized');
     return await this.auth.generateVerificationCode(token);
   }
@@ -140,7 +146,8 @@ export class AuthController {
   @Post('verify-codeforces-profile')
   async verifyCodeforcesProfile(@Req() req: RequestWithCookies) {
     const token =
-      req.header('authorization')?.split(' ')[1] ?? req.cookies?.accessToken;
+      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
+      req.cookies?.accessToken;
     if (!token) throw new UnauthorizedException('Unauthorized');
     return await this.auth.verifyCodeforcesProfile(token);
   }

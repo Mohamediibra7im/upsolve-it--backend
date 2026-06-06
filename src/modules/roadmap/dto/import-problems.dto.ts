@@ -7,4 +7,7 @@ export class ImportProblemsDto {
   @IsInt()
   @Min(1)
   contestId?: number;
+
+  @IsOptional()
+  force?: boolean;
 }

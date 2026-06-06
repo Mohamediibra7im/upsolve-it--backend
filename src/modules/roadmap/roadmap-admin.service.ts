@@ -14,13 +14,9 @@ import {
   RoadmapTopicDocument,
 } from './schemas/roadmap-topic.schema';
 import {
-  RoadmapVideo,
-  RoadmapVideoDocument,
-} from './schemas/roadmap-video.schema';
-import {
-  RoadmapSheet,
-  RoadmapSheetDocument,
-} from './schemas/roadmap-sheet.schema';
+  RoadmapResource,
+  RoadmapResourceDocument,
+} from './schemas/roadmap-resource.schema';
 import {
   RoadmapProblem,
   RoadmapProblemDocument,
@@ -29,9 +25,10 @@ import { CreateLevelDto } from './dto/create-level.dto';
 import { UpdateLevelDto } from './dto/update-level.dto';
 import { CreateTopicDto } from './dto/create-topic.dto';
 import { UpdateTopicDto } from './dto/update-topic.dto';
-import { UpsertVideoDto } from './dto/upsert-video.dto';
-import { UpsertSheetDto } from './dto/upsert-sheet.dto';
+import { CreateResourceDto } from './dto/create-resource.dto';
+import { UpdateResourceDto } from './dto/update-resource.dto';
 import { CreateProblemDto } from './dto/create-problem.dto';
+import { UpdateProblemDto } from './dto/update-problem.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 export type RoadmapAdminAudit = {
@@ -46,10 +43,8 @@ export class RoadmapAdminService {
     private readonly levelModel: Model<RoadmapLevelDocument>,
     @InjectModel(RoadmapTopic.name)
     private readonly topicModel: Model<RoadmapTopicDocument>,
-    @InjectModel(RoadmapVideo.name)
-    private readonly videoModel: Model<RoadmapVideoDocument>,
-    @InjectModel(RoadmapSheet.name)
-    private readonly sheetModel: Model<RoadmapSheetDocument>,
+    @InjectModel(RoadmapResource.name)
+    private readonly resourceModel: Model<RoadmapResourceDocument>,
     @InjectModel(RoadmapProblem.name)
     private readonly problemModel: Model<RoadmapProblemDocument>,
     private readonly auditLogs: AuditLogsService,
@@ -72,7 +67,7 @@ export class RoadmapAdminService {
       .select('orderIndex')
       .limit(1)
       .lean();
-    return last[0]?.orderIndex ?? 0;
+    return last[0]?.orderIndex ?? -1; // -1 so first item can be index 0
   }
 
   private async insertAt(
@@ -82,7 +77,7 @@ export class RoadmapAdminService {
   ): Promise<number> {
     const maxIndex = await this.getMaxOrderIndex(model, filter);
     if (desired == null) return maxIndex + 1;
-    const normalized = Math.max(1, Math.min(desired, maxIndex + 1));
+    const normalized = Math.max(0, Math.min(desired, maxIndex + 1));
     await model.updateMany(
       { ...filter, orderIndex: { $gte: normalized } },
       { $inc: { orderIndex: 1 } },
@@ -96,7 +91,7 @@ export class RoadmapAdminService {
   ): Promise<RoadmapLevelDocument> {
     const current = doc.orderIndex;
     const maxIndex = await this.getMaxOrderIndex(this.levelModel, {});
-    const next = Math.max(1, Math.min(desired, maxIndex));
+    const next = Math.max(0, Math.min(desired, maxIndex));
     if (next === current) return doc;
     if (next < current) {
       await this.levelModel.updateMany(
@@ -121,7 +116,7 @@ export class RoadmapAdminService {
     const current = doc.orderIndex;
     const filter = { levelId: doc.levelId };
     const maxIndex = await this.getMaxOrderIndex(this.topicModel, filter);
-    const next = Math.max(1, Math.min(desired, maxIndex));
+    const next = Math.max(0, Math.min(desired, maxIndex));
     if (next === current) return doc;
     if (next < current) {
       await this.topicModel.updateMany(
@@ -130,6 +125,31 @@ export class RoadmapAdminService {
       );
     } else {
       await this.topicModel.updateMany(
+        { ...filter, orderIndex: { $gt: current, $lte: next } },
+        { $inc: { orderIndex: -1 } },
+      );
+    }
+    doc.orderIndex = next;
+    await doc.save();
+    return doc;
+  }
+
+  private async reorderResource(
+    doc: RoadmapResourceDocument,
+    desired: number,
+  ): Promise<RoadmapResourceDocument> {
+    const current = doc.orderIndex;
+    const filter = { topicId: doc.topicId, language: doc.language };
+    const maxIndex = await this.getMaxOrderIndex(this.resourceModel, filter);
+    const next = Math.max(0, Math.min(desired, maxIndex));
+    if (next === current) return doc;
+    if (next < current) {
+      await this.resourceModel.updateMany(
+        { ...filter, orderIndex: { $gte: next, $lt: current } },
+        { $inc: { orderIndex: 1 } },
+      );
+    } else {
+      await this.resourceModel.updateMany(
         { ...filter, orderIndex: { $gt: current, $lte: next } },
         { $inc: { orderIndex: -1 } },
       );
@@ -144,9 +164,9 @@ export class RoadmapAdminService {
     desired: number,
   ): Promise<RoadmapProblemDocument> {
     const current = doc.orderIndex;
-    const filter = { sheetId: doc.sheetId };
+    const filter = { topicId: doc.topicId };
     const maxIndex = await this.getMaxOrderIndex(this.problemModel, filter);
-    const next = Math.max(1, Math.min(desired, maxIndex));
+    const next = Math.max(0, Math.min(desired, maxIndex));
     if (next === current) return doc;
     if (next < current) {
       await this.problemModel.updateMany(
@@ -164,18 +184,76 @@ export class RoadmapAdminService {
     return doc;
   }
 
-  private async getXpPerAcceptedProblem(topicId: Types.ObjectId) {
-    const topic = await this.topicModel
-      .findById(topicId)
-      .select('levelId')
-      .lean();
-    if (!topic) return 10;
-    const level = await this.levelModel
-      .findById(topic.levelId)
-      .select('xpPerAcceptedProblem')
-      .lean();
-    return level?.xpPerAcceptedProblem ?? 10;
+  private parseCfProblemId(url: string): string {
+    const trimmed = url.trim();
+    if (!trimmed) return '';
+
+    if (trimmed.toLowerCase().startsWith('http')) {
+      const parts = trimmed.split('/').filter(Boolean);
+      const contestIdx = parts.findIndex((p) => p.toLowerCase() === 'contest');
+      const problemIdx = parts.findIndex((p) => p.toLowerCase() === 'problem');
+      const gymIdx = parts.findIndex((p) => p.toLowerCase() === 'gym');
+
+      if (contestIdx !== -1 && problemIdx !== -1 && problemIdx > contestIdx) {
+        const contestId = parts[contestIdx + 1];
+        const index = parts[problemIdx + 1];
+        if (contestId && index) {
+          return `${contestId}_${index.toUpperCase()}`;
+        }
+      }
+
+      if (gymIdx !== -1 && problemIdx !== -1 && problemIdx > gymIdx) {
+        const contestId = parts[gymIdx + 1];
+        const index = parts[problemIdx + 1];
+        if (contestId && index) {
+          return `${contestId}_${index.toUpperCase()}`;
+        }
+      }
+
+      const problemsetIdx = parts.findIndex(
+        (p) => p.toLowerCase() === 'problemset',
+      );
+      const problemsetProblemIdx = parts.findIndex(
+        (p) => p.toLowerCase() === 'problem',
+      );
+      if (
+        problemsetIdx !== -1 &&
+        problemsetProblemIdx !== -1 &&
+        problemsetProblemIdx > problemsetIdx
+      ) {
+        const contestId =
+          problemsetProblemIdx + 1 < parts.length
+            ? parts[problemsetProblemIdx + 1]
+            : '';
+        const index =
+          problemsetProblemIdx + 2 < parts.length
+            ? parts[problemsetProblemIdx + 2]
+            : '';
+        if (contestId && index) {
+          return `${contestId}_${index.toUpperCase()}`;
+        }
+      }
+    }
+
+    const match = trimmed.match(/^(\d+)([A-Za-z][A-Za-z0-9]*)$/);
+    if (match) {
+      return `${match[1]}_${match[2].toUpperCase()}`;
+    }
+
+    if (trimmed.includes('/')) {
+      const parts = trimmed.split('/').filter(Boolean);
+      if (parts[0] === 'gym' && parts[1] && parts[2]) {
+        return `${parts[1]}_${parts[2].toUpperCase()}`;
+      }
+      if (parts[0] && parts[1]) {
+        return `${parts[0]}_${parts[1].toUpperCase()}`;
+      }
+    }
+
+    return trimmed;
   }
+
+  // === LEVEL MANAGEMENT ===
 
   async listLevels() {
     const levels = await this.levelModel.find().sort({ orderIndex: 1 }).lean();
@@ -227,22 +305,15 @@ export class RoadmapAdminService {
 
     if (dto.title !== undefined) doc.title = dto.title;
     if (dto.description !== undefined) doc.description = dto.description;
-    if (dto.isPublished !== undefined) doc.isPublished = dto.isPublished;
+    if (dto.isPublished !== undefined)
+      doc.isPublished = doc.isPublished = dto.isPublished;
     if (dto.visibility !== undefined) doc.visibility = dto.visibility;
-    if (dto.allowedUserIds !== undefined)
-      doc.allowedUserIds = dto.allowedUserIds;
-    if (dto.videoUnlockSheetPct !== undefined) {
-      doc.videoUnlockSheetPct = dto.videoUnlockSheetPct;
+    if (dto.allowedUserIds !== undefined) {
+      doc.allowedUserIds = dto.allowedUserIds.map(
+        (uid) => new Types.ObjectId(uid),
+      );
     }
-    if (dto.sheetUnlockTopicPct !== undefined) {
-      doc.sheetUnlockTopicPct = dto.sheetUnlockTopicPct;
-    }
-    if (dto.levelCompletionPct !== undefined) {
-      doc.levelCompletionPct = dto.levelCompletionPct;
-    }
-    if (dto.xpPerAcceptedProblem !== undefined) {
-      doc.xpPerAcceptedProblem = dto.xpPerAcceptedProblem;
-    }
+    if (dto.levelBonusXp !== undefined) doc.levelBonusXp = dto.levelBonusXp;
 
     await doc.save();
 
@@ -271,20 +342,9 @@ export class RoadmapAdminService {
       .lean();
     const topicIds = topics.map((t) => t._id);
 
-    const sheets = topicIds.length
-      ? await this.sheetModel
-          .find({ topicId: { $in: topicIds } })
-          .select('_id')
-          .lean()
-      : [];
-    const sheetIds = sheets.map((s) => s._id);
-
-    if (sheetIds.length) {
-      await this.problemModel.deleteMany({ sheetId: { $in: sheetIds } });
-    }
     if (topicIds.length) {
-      await this.sheetModel.deleteMany({ topicId: { $in: topicIds } });
-      await this.videoModel.deleteMany({ topicId: { $in: topicIds } });
+      await this.problemModel.deleteMany({ topicId: { $in: topicIds } });
+      await this.resourceModel.deleteMany({ topicId: { $in: topicIds } });
       await this.topicModel.deleteMany({ levelId: id });
     }
 
@@ -309,6 +369,8 @@ export class RoadmapAdminService {
     return { ok: true };
   }
 
+  // === TOPIC MANAGEMENT ===
+
   async listTopics(levelId: string) {
     const id = this.toObjectId(levelId, 'Level');
     const topics = await this.topicModel
@@ -317,40 +379,32 @@ export class RoadmapAdminService {
       .lean();
 
     const topicIds = topics.map((t) => t._id);
-    const videos = topicIds.length
-      ? await this.videoModel
-          .find({ topicId: { $in: topicIds } })
-          .select('topicId')
-          .lean()
-      : [];
-    const sheets = topicIds.length
-      ? await this.sheetModel
-          .find({ topicId: { $in: topicIds } })
-          .select('_id topicId')
-          .lean()
-      : [];
 
-    const videoSet = new Set(videos.map((v) => String(v.topicId)));
-    const sheetMap = new Map(sheets.map((s) => [String(s.topicId), s._id]));
-    const sheetIds = sheets.map((s) => s._id);
-
-    const problemCounts = sheetIds.length
-      ? await this.problemModel.aggregate([
-          { $match: { sheetId: { $in: sheetIds } } },
-          { $group: { _id: '$sheetId', count: { $sum: 1 } } },
+    // Count resources and problems for each topic
+    const resources = topicIds.length
+      ? await this.resourceModel.aggregate([
+          { $match: { topicId: { $in: topicIds } } },
+          { $group: { _id: '$topicId', count: { $sum: 1 } } },
         ])
       : [];
-    const countMap = new Map(
-      problemCounts.map((c) => [String(c._id), Number(c.count)]),
+    const problems = topicIds.length
+      ? await this.problemModel.aggregate([
+          { $match: { topicId: { $in: topicIds } } },
+          { $group: { _id: '$topicId', count: { $sum: 1 } } },
+        ])
+      : [];
+
+    const resourceMap = new Map(
+      resources.map((r) => [String(r._id), Number(r.count)]),
+    );
+    const problemMap = new Map(
+      problems.map((p) => [String(p._id), Number(p.count)]),
     );
 
     return topics.map((t) => ({
       ...t,
-      hasVideo: videoSet.has(String(t._id)),
-      hasSheet: sheetMap.has(String(t._id)),
-      problemsCount: sheetMap.get(String(t._id))
-        ? (countMap.get(String(sheetMap.get(String(t._id)))) ?? 0)
-        : 0,
+      resourcesCount: resourceMap.get(String(t._id)) ?? 0,
+      problemsCount: problemMap.get(String(t._id)) ?? 0,
     }));
   }
 
@@ -400,9 +454,13 @@ export class RoadmapAdminService {
     if (dto.title !== undefined) doc.title = dto.title;
     if (dto.description !== undefined) doc.description = dto.description;
     if (dto.subtopics !== undefined) doc.subtopics = dto.subtopics;
-    if (dto.xpVideoReward !== undefined) {
-      doc.xpVideoReward = dto.xpVideoReward;
-    }
+    if (dto.requiredLearningPct !== undefined)
+      doc.requiredLearningPct = dto.requiredLearningPct;
+    if (dto.requiredProblemPct !== undefined)
+      doc.requiredProblemPct = dto.requiredProblemPct;
+    if (dto.topicXpReward !== undefined) doc.topicXpReward = dto.topicXpReward;
+    if (dto.groupLinks !== undefined) doc.groupLinks = dto.groupLinks;
+    if (dto.groupNote !== undefined) doc.groupNote = dto.groupNote;
 
     await doc.save();
 
@@ -432,12 +490,8 @@ export class RoadmapAdminService {
     const doc = await this.topicModel.findById(id);
     if (!doc) throw new NotFoundException('Topic not found');
 
-    const sheet = await this.sheetModel.findOne({ topicId: id }).select('_id');
-    if (sheet) {
-      await this.problemModel.deleteMany({ sheetId: sheet._id });
-      await this.sheetModel.deleteOne({ _id: sheet._id });
-    }
-    await this.videoModel.deleteOne({ topicId: id });
+    await this.problemModel.deleteMany({ topicId: id });
+    await this.resourceModel.deleteMany({ topicId: id });
     await this.topicModel.deleteOne({ _id: id });
 
     await this.topicModel.updateMany(
@@ -459,34 +513,44 @@ export class RoadmapAdminService {
     return { ok: true };
   }
 
-  async upsertVideo(
+  // === RESOURCE MANAGEMENT ===
+
+  async listResources(topicId: string) {
+    const id = this.toObjectId(topicId, 'Topic');
+    return await this.resourceModel
+      .find({ topicId: id })
+      .sort({ orderIndex: 1 })
+      .lean();
+  }
+
+  async addResource(
     topicId: string,
-    dto: UpsertVideoDto,
+    dto: CreateResourceDto,
     audit?: RoadmapAdminAudit,
   ) {
     const id = this.toObjectId(topicId, 'Topic');
     const topic = await this.topicModel.findById(id);
     if (!topic) throw new NotFoundException('Topic not found');
 
-    const update: Record<string, unknown> = {
-      youtubeUrl: dto.youtubeUrl,
-    };
-    if (dto.title !== undefined) update.title = dto.title;
-    if (dto.durationSec !== undefined) update.durationSec = dto.durationSec;
-
-    const doc = await this.videoModel.findOneAndUpdate(
-      { topicId: id },
-      { $set: update, $setOnInsert: { topicId: id } },
-      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
+    const orderIndex = await this.insertAt(
+      this.resourceModel,
+      { topicId: id, language: dto.language },
+      dto.orderIndex,
     );
+
+    const doc = await this.resourceModel.create({
+      ...dto,
+      topicId: id,
+      orderIndex,
+    });
 
     if (audit) {
       await this.auditLogs.logAction(
-        'UPSERT_ROADMAP_VIDEO',
-        'RoadmapVideo',
+        'CREATE_ROADMAP_RESOURCE',
+        'RoadmapResource',
         audit.adminId,
         audit.adminHandle,
-        { topicId: String(id), videoId: String(doc._id) },
+        { resourceId: String(doc._id), topicId: String(id) },
         doc._id,
       );
     }
@@ -494,89 +558,118 @@ export class RoadmapAdminService {
     return doc;
   }
 
-  async deleteVideo(topicId: string, audit?: RoadmapAdminAudit) {
-    const id = this.toObjectId(topicId, 'Topic');
-    await this.videoModel.deleteOne({ topicId: id });
+  async updateResource(
+    resourceId: string,
+    dto: UpdateResourceDto,
+    audit?: RoadmapAdminAudit,
+  ) {
+    const id = this.toObjectId(resourceId, 'Resource');
+    let doc: any = await this.resourceModel.findById(id);
+    if (!doc) throw new NotFoundException('Resource not found');
+
+    if (dto.orderIndex != null && dto.orderIndex !== doc.orderIndex) {
+      doc = await this.reorderResource(doc, dto.orderIndex);
+    }
+
+    if (dto.title !== undefined) doc.title = dto.title;
+    if (dto.description !== undefined) doc.description = dto.description || '';
+    if (dto.language !== undefined) doc.language = dto.language;
+    if (dto.type !== undefined) doc.type = dto.type;
+    if (dto.url !== undefined) doc.url = dto.url;
+    if (dto.weight !== undefined) doc.weight = dto.weight;
+    if (dto.xpReward !== undefined) doc.xpReward = dto.xpReward;
+
+    await doc.save();
+
     if (audit) {
       await this.auditLogs.logAction(
-        'DELETE_ROADMAP_VIDEO',
-        'RoadmapVideo',
+        'UPDATE_ROADMAP_RESOURCE',
+        'RoadmapResource',
         audit.adminId,
         audit.adminHandle,
-        { topicId: String(id) },
+        { resourceId: String(doc._id) },
+        doc._id,
       );
     }
+
+    return doc;
+  }
+
+  async deleteResource(resourceId: string, audit?: RoadmapAdminAudit) {
+    const id = this.toObjectId(resourceId, 'Resource');
+    const doc = await this.resourceModel.findById(id);
+    if (!doc) throw new NotFoundException('Resource not found');
+
+    await this.resourceModel.deleteOne({ _id: id });
+    await this.resourceModel.updateMany(
+      {
+        topicId: doc.topicId,
+        language: doc.language,
+        orderIndex: { $gt: doc.orderIndex },
+      },
+      { $inc: { orderIndex: -1 } },
+    );
+
+    if (audit) {
+      await this.auditLogs.logAction(
+        'DELETE_ROADMAP_RESOURCE',
+        'RoadmapResource',
+        audit.adminId,
+        audit.adminHandle,
+        { resourceId: String(id) },
+        id,
+      );
+    }
+
     return { ok: true };
   }
 
-  async upsertSheet(
+  async reorderResourceOnly(resourceId: string, orderIndex: number) {
+    const id = this.toObjectId(resourceId, 'Resource');
+    const doc = await this.resourceModel.findById(id);
+    if (!doc) throw new NotFoundException('Resource not found');
+    return await this.reorderResource(doc, orderIndex);
+  }
+
+  // === PROBLEM MANAGEMENT ===
+
+  async listProblems(topicId: string) {
+    const id = this.toObjectId(topicId, 'Topic');
+    return await this.problemModel
+      .find({ topicId: id })
+      .sort({ orderIndex: 1 })
+      .lean();
+  }
+
+  async addProblem(
     topicId: string,
-    dto: UpsertSheetDto,
+    dto: CreateProblemDto,
     audit?: RoadmapAdminAudit,
   ) {
     const id = this.toObjectId(topicId, 'Topic');
     const topic = await this.topicModel.findById(id);
     if (!topic) throw new NotFoundException('Topic not found');
 
-    const update: Record<string, unknown> = {
-      cfGroupUrl: dto.cfGroupUrl,
-    };
-    if (dto.title !== undefined) update.title = dto.title;
-    if (dto.groupNote !== undefined) update.groupNote = dto.groupNote;
-
-    const doc = await this.sheetModel.findOneAndUpdate(
-      { topicId: id },
-      { $set: update, $setOnInsert: { topicId: id } },
-      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
-    );
-
-    if (audit) {
-      await this.auditLogs.logAction(
-        'UPSERT_ROADMAP_SHEET',
-        'RoadmapSheet',
-        audit.adminId,
-        audit.adminHandle,
-        { topicId: String(id), sheetId: String(doc._id) },
-        doc._id,
-      );
-    }
-
-    return doc;
-  }
-
-  async addProblem(
-    sheetId: string,
-    dto: CreateProblemDto,
-    audit?: RoadmapAdminAudit,
-  ) {
-    const id = this.toObjectId(sheetId, 'Sheet');
-    const sheet = await this.sheetModel.findById(id);
-    if (!sheet) throw new NotFoundException('Sheet not found');
-
+    const cfProblemId = this.parseCfProblemId(dto.url);
     const exists = await this.problemModel.findOne({
-      sheetId: id,
-      cfProblemId: dto.cfProblemId,
+      topicId: id,
+      cfProblemId,
     });
-    if (exists) {
-      throw new BadRequestException('Problem already exists in this sheet');
+    if (exists && cfProblemId) {
+      throw new BadRequestException('Problem already exists in this topic');
     }
 
     const orderIndex = await this.insertAt(
       this.problemModel,
-      { sheetId: id },
+      { topicId: id },
       dto.orderIndex,
     );
 
-    const xpReward =
-      dto.xpReward ?? (await this.getXpPerAcceptedProblem(sheet.topicId)) ?? 10;
-
     const doc = await this.problemModel.create({
       ...dto,
-      sheetId: id,
+      topicId: id,
       orderIndex,
-      title: dto.title ?? '',
-      difficulty: dto.difficulty ?? '',
-      xpReward,
+      cfProblemId,
     });
 
     if (audit) {
@@ -585,7 +678,7 @@ export class RoadmapAdminService {
         'RoadmapProblem',
         audit.adminId,
         audit.adminHandle,
-        { problemId: String(doc._id), sheetId: String(id) },
+        { problemId: String(doc._id), topicId: String(id) },
         doc._id,
       );
     }
@@ -594,44 +687,47 @@ export class RoadmapAdminService {
   }
 
   async addProblems(
-    sheetId: string,
-    dtos: Array<{ cfProblemId: string; title?: string; xpReward?: number }>,
+    topicId: string,
+    dtos: Array<{ name: string; url: string; xpReward?: number }>,
     audit?: RoadmapAdminAudit,
   ) {
-    const id = this.toObjectId(sheetId, 'Sheet');
-    const sheet = await this.sheetModel.findById(id);
-    if (!sheet) throw new NotFoundException('Sheet not found');
+    const id = this.toObjectId(topicId, 'Topic');
+    const topic = await this.topicModel.findById(id);
+    if (!topic) throw new NotFoundException('Topic not found');
 
     const existing = await this.problemModel
-      .find({ sheetId: id })
+      .find({ topicId: id })
       .select('cfProblemId')
       .lean();
-    const existingIds = new Set(existing.map((p) => p.cfProblemId));
+    const existingIds = new Set(
+      existing.map((p) => p.cfProblemId).filter(Boolean),
+    );
 
     const maxIndex = await this.getMaxOrderIndex(this.problemModel, {
-      sheetId: id,
+      topicId: id,
     });
 
-    const defaultXp = (await this.getXpPerAcceptedProblem(sheet.topicId)) ?? 10;
-
     const docs: Array<{
-      sheetId: Types.ObjectId;
+      topicId: Types.ObjectId;
+      name: string;
+      url: string;
       cfProblemId: string;
-      title: string;
       orderIndex: number;
       xpReward: number;
     }> = [];
 
     let orderIndex = maxIndex;
     for (const dto of dtos) {
-      if (existingIds.has(dto.cfProblemId)) continue;
+      const cfProblemId = this.parseCfProblemId(dto.url);
+      if (cfProblemId && existingIds.has(cfProblemId)) continue;
       orderIndex++;
       docs.push({
-        sheetId: id,
-        cfProblemId: dto.cfProblemId,
-        title: dto.title ?? '',
+        topicId: id,
+        name: dto.name,
+        url: dto.url,
+        cfProblemId,
         orderIndex,
-        xpReward: dto.xpReward ?? defaultXp,
+        xpReward: dto.xpReward ?? 40,
       });
     }
 
@@ -647,7 +743,7 @@ export class RoadmapAdminService {
         'RoadmapProblem',
         audit.adminId,
         audit.adminHandle,
-        { sheetId: String(id), count: inserted.length },
+        { topicId: String(id), count: inserted.length },
       );
     }
 
@@ -656,6 +752,42 @@ export class RoadmapAdminService {
       inserted: inserted.length,
       skipped: dtos.length - inserted.length,
     };
+  }
+
+  async updateProblem(
+    problemId: string,
+    dto: UpdateProblemDto,
+    audit?: RoadmapAdminAudit,
+  ) {
+    const id = this.toObjectId(problemId, 'Problem');
+    let doc: any = await this.problemModel.findById(id);
+    if (!doc) throw new NotFoundException('Problem not found');
+
+    if (dto.orderIndex != null && dto.orderIndex !== doc.orderIndex) {
+      doc = await this.reorderProblem(doc, dto.orderIndex);
+    }
+
+    if (dto.name !== undefined) doc.name = dto.name;
+    if (dto.url !== undefined) {
+      doc.url = dto.url;
+      doc.cfProblemId = this.parseCfProblemId(dto.url);
+    }
+    if (dto.xpReward !== undefined) doc.xpReward = dto.xpReward;
+
+    await doc.save();
+
+    if (audit) {
+      await this.auditLogs.logAction(
+        'UPDATE_ROADMAP_PROBLEM',
+        'RoadmapProblem',
+        audit.adminId,
+        audit.adminHandle,
+        { problemId: String(doc._id) },
+        doc._id,
+      );
+    }
+
+    return doc;
   }
 
   async reorderProblemOnly(problemId: string, orderIndex: number) {
@@ -672,7 +804,7 @@ export class RoadmapAdminService {
 
     await this.problemModel.deleteOne({ _id: id });
     await this.problemModel.updateMany(
-      { sheetId: doc.sheetId, orderIndex: { $gt: doc.orderIndex } },
+      { topicId: doc.topicId, orderIndex: { $gt: doc.orderIndex } },
       { $inc: { orderIndex: -1 } },
     );
 
@@ -699,7 +831,7 @@ export class RoadmapAdminService {
 
     for (const doc of docs) {
       await this.problemModel.updateMany(
-        { sheetId: doc.sheetId, orderIndex: { $gt: doc.orderIndex } },
+        { topicId: doc.topicId, orderIndex: { $gt: doc.orderIndex } },
         { $inc: { orderIndex: -1 } },
       );
     }

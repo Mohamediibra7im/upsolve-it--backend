@@ -4,15 +4,15 @@ import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 export class UpdateProblemDto {
   @IsOptional()
   @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  url?: string;
+
+  @IsOptional()
+  @IsString()
   cfProblemId?: string;
-
-  @IsOptional()
-  @IsString()
-  title?: string;
-
-  @IsOptional()
-  @IsString()
-  difficulty?: string;
 
   @IsOptional()
   @Type(() => Number)

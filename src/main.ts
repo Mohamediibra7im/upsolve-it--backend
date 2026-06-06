@@ -16,7 +16,8 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   validateEnv(config);
   const port = Number(config.get<string>('PORT') ?? 3000);
-  const frontendOrigin = config.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:3001';
+  const frontendOrigin =
+    config.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:3001';
   const appUrl = config.get<string>('APP_URL') ?? '';
 
   app.use(helmet());
@@ -24,6 +25,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
+      forbidNonWhitelisted: true,
       transform: true,
     }),
   );

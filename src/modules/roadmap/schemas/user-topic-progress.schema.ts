@@ -12,19 +12,16 @@ export class UserTopicProgress {
   topicId!: Types.ObjectId;
 
   @Prop({ type: Number, default: 0 })
-  videoPct!: number;
-
-  @Prop({ type: Boolean, default: false })
-  videoUnlockedSheet!: boolean;
+  learningPct!: number;
 
   @Prop({ type: Number, default: 0 })
-  sheetPct!: number;
-
-  @Prop({ type: Boolean, default: false })
-  sheetUnlockedNext!: boolean;
+  problemPct!: number;
 
   @Prop({ type: Boolean, default: false })
   isTopicComplete!: boolean;
+
+  @Prop({ type: Date, default: null })
+  completedAt!: Date | null;
 
   @Prop({ type: Boolean, default: false })
   topicBonusAwarded!: boolean;

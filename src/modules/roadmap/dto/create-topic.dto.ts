@@ -24,5 +24,25 @@ export class CreateTopicDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
-  xpVideoReward?: number;
+  requiredLearningPct?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  requiredProblemPct?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  topicXpReward?: number;
+
+  @IsOptional()
+  @IsString()
+  groupLinks?: string;
+
+  @IsOptional()
+  @IsString()
+  groupNote?: string;
 }

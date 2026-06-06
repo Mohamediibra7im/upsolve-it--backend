@@ -5,26 +5,26 @@ export type RoadmapProblemDocument = HydratedDocument<RoadmapProblem>;
 
 @Schema({ collection: 'roadmap_problems', timestamps: true })
 export class RoadmapProblem {
-  @Prop({ type: Types.ObjectId, ref: 'RoadmapSheet', required: true })
-  sheetId!: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'RoadmapTopic', required: true })
+  topicId!: Types.ObjectId;
 
   @Prop({ required: true })
-  cfProblemId!: string;
+  name!: string;
 
-  @Prop({ default: '' })
-  title!: string;
-
-  @Prop({ default: '' })
-  difficulty!: string;
+  @Prop({ required: true })
+  url!: string;
 
   @Prop({ required: true })
   orderIndex!: number;
 
-  @Prop({ default: 10 })
+  @Prop({ required: true })
   xpReward!: number;
+
+  @Prop({ default: '' })
+  cfProblemId!: string;
 }
 
 export const RoadmapProblemSchema =
   SchemaFactory.createForClass(RoadmapProblem);
-RoadmapProblemSchema.index({ sheetId: 1, orderIndex: 1 });
-RoadmapProblemSchema.index({ sheetId: 1, cfProblemId: 1 }, { unique: true });
+RoadmapProblemSchema.index({ topicId: 1, orderIndex: 1 });
+RoadmapProblemSchema.index({ topicId: 1, cfProblemId: 1 });

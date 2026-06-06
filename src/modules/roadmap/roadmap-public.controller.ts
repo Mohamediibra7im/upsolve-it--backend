@@ -11,7 +11,6 @@ import {
 } from '@nestjs/common';
 import { RoadmapPublicService } from './roadmap-public.service';
 import { RoadmapProgressService } from './roadmap-progress.service';
-import { UpdateVideoProgressDto } from './dto/update-video-progress.dto';
 import { AdminService } from '../admin/admin.service';
 
 @Controller('roadmap')
@@ -102,20 +101,24 @@ export class RoadmapPublicController {
     @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Param('topicId') topicId: string,
+    @Query('language') language: string | undefined,
     @Req() req: any,
   ) {
     const userId = await this.roadmap.resolveUserId(
       authorization,
       req.cookies?.accessToken,
     );
-    return await this.roadmap.getTopicDetail(id, topicId, userId);
+    const lang =
+      language === 'Arabic' || language === 'English' ? language : undefined;
+    return await this.roadmap.getTopicDetail(id, topicId, userId, lang);
   }
 
-  @Post('videos/:videoId/progress')
-  async updateVideoProgress(
+  @Post('resources/:resourceId/progress')
+  async updateResourceProgress(
     @Headers('authorization') authorization: string | undefined,
-    @Param('videoId') videoId: string,
-    @Body() body: UpdateVideoProgressDto,
+    @Param('resourceId') resourceId: string,
+    @Body()
+    body: { watchPct?: number; positionSec?: number; completed?: boolean },
     @Req() req: any,
   ) {
     const userId = await this.roadmap.resolveUserId(
@@ -123,13 +126,14 @@ export class RoadmapPublicController {
       req.cookies?.accessToken,
     );
     if (!userId) throw new UnauthorizedException('Unauthorized');
-    return await this.progress.recordVideoProgress(userId, videoId, body);
+    return await this.progress.recordResourceProgress(userId, resourceId, body);
   }
 
-  @Post('sheets/:sheetId/sync')
-  async syncSheet(
+  @Post('topics/:topicId/sync')
+  async syncTopicProblems(
     @Headers('authorization') authorization: string | undefined,
-    @Param('sheetId') sheetId: string,
+    @Param('topicId') topicId: string,
+    @Body() body: { language?: 'Arabic' | 'English' },
     @Req() req: any,
   ) {
     const userId = await this.roadmap.resolveUserId(
@@ -137,14 +141,18 @@ export class RoadmapPublicController {
       req.cookies?.accessToken,
     );
     if (!userId) throw new UnauthorizedException('Unauthorized');
-    return await this.progress.syncSheet(userId, sheetId);
+    return await this.progress.syncTopicProblems(
+      userId,
+      topicId,
+      body.language,
+    );
   }
 
   @Post('problems/:problemId/toggle')
   async toggleProblem(
     @Headers('authorization') authorization: string | undefined,
     @Param('problemId') problemId: string,
-    @Body() body: { solved: boolean },
+    @Body() body: { solved: boolean; language?: 'Arabic' | 'English' },
     @Req() req: any,
   ) {
     const userId = await this.roadmap.resolveUserId(
@@ -156,6 +164,26 @@ export class RoadmapPublicController {
       userId,
       problemId,
       body.solved,
+      body.language,
+    );
+  }
+
+  @Post('topics/:topicId/reset-learning')
+  async resetTopicLearning(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('topicId') topicId: string,
+    @Query('language') language: 'Arabic' | 'English' | undefined,
+    @Req() req: any,
+  ) {
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req.cookies?.accessToken,
+    );
+    if (!userId) throw new UnauthorizedException('Unauthorized');
+    return await this.progress.resetTopicLearningProgress(
+      userId,
+      topicId,
+      language,
     );
   }
 }

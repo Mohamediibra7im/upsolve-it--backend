@@ -24,3 +24,5 @@ export class UserProblemProgress {
 export const UserProblemProgressSchema =
   SchemaFactory.createForClass(UserProblemProgress);
 UserProblemProgressSchema.index({ userId: 1, problemId: 1 }, { unique: true });
+UserProblemProgressSchema.index({ userId: 1, isSolved: 1 });
+UserProblemProgressSchema.index({ userId: 1, isSolved: 1, solvedAt: 1 });

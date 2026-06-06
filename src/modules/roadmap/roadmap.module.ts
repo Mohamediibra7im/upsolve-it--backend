@@ -13,21 +13,17 @@ import {
   RoadmapTopicSchema,
 } from './schemas/roadmap-topic.schema';
 import {
-  RoadmapVideo,
-  RoadmapVideoSchema,
-} from './schemas/roadmap-video.schema';
-import {
-  RoadmapSheet,
-  RoadmapSheetSchema,
-} from './schemas/roadmap-sheet.schema';
+  RoadmapResource,
+  RoadmapResourceSchema,
+} from './schemas/roadmap-resource.schema';
 import {
   RoadmapProblem,
   RoadmapProblemSchema,
 } from './schemas/roadmap-problem.schema';
 import {
-  UserVideoProgress,
-  UserVideoProgressSchema,
-} from './schemas/user-video-progress.schema';
+  UserResourceProgress,
+  UserResourceProgressSchema,
+} from './schemas/user-resource-progress.schema';
 import {
   UserProblemProgress,
   UserProblemProgressSchema,
@@ -60,10 +56,9 @@ import { RoadmapProgressService } from './roadmap-progress.service';
       { name: User.name, schema: UserSchema },
       { name: RoadmapLevel.name, schema: RoadmapLevelSchema },
       { name: RoadmapTopic.name, schema: RoadmapTopicSchema },
-      { name: RoadmapVideo.name, schema: RoadmapVideoSchema },
-      { name: RoadmapSheet.name, schema: RoadmapSheetSchema },
+      { name: RoadmapResource.name, schema: RoadmapResourceSchema },
       { name: RoadmapProblem.name, schema: RoadmapProblemSchema },
-      { name: UserVideoProgress.name, schema: UserVideoProgressSchema },
+      { name: UserResourceProgress.name, schema: UserResourceProgressSchema },
       { name: UserProblemProgress.name, schema: UserProblemProgressSchema },
       { name: UserTopicProgress.name, schema: UserTopicProgressSchema },
       { name: UserLevelProgress.name, schema: UserLevelProgressSchema },

@@ -3,15 +3,14 @@ import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateProblemDto {
   @IsString()
-  cfProblemId!: string;
+  name!: string;
 
-  @IsOptional()
   @IsString()
-  title?: string;
+  url!: string;
 
-  @IsOptional()
   @IsString()
-  difficulty?: string;
+  @IsOptional()
+  cfProblemId?: string;
 
   @IsOptional()
   @Type(() => Number)

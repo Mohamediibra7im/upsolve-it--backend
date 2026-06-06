@@ -21,7 +21,7 @@ export class UpdateLevelDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
+  @Min(0)
   orderIndex?: number;
 
   @IsOptional()
@@ -40,26 +40,5 @@ export class UpdateLevelDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
-  @Max(100)
-  videoUnlockSheetPct?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  @Max(100)
-  sheetUnlockTopicPct?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  @Max(100)
-  levelCompletionPct?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  xpPerAcceptedProblem?: number;
+  levelBonusXp?: number;
 }

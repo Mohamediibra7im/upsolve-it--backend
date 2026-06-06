@@ -23,17 +23,8 @@ export class RoadmapLevel {
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
   allowedUserIds!: Types.ObjectId[];
 
-  @Prop({ default: 80 })
-  videoUnlockSheetPct!: number;
-
-  @Prop({ default: 80 })
-  sheetUnlockTopicPct!: number;
-
-  @Prop({ default: 80 })
-  levelCompletionPct!: number;
-
-  @Prop({ default: 10 })
-  xpPerAcceptedProblem!: number;
+  @Prop({ default: 500 })
+  levelBonusXp!: number;
 }
 
 export const RoadmapLevelSchema = SchemaFactory.createForClass(RoadmapLevel);

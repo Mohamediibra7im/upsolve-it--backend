@@ -11,11 +11,10 @@ import {
 
 class BulkProblemItemDto {
   @IsString()
-  cfProblemId!: string;
+  name!: string;
 
-  @IsOptional()
   @IsString()
-  title?: string;
+  url!: string;
 
   @IsOptional()
   @Type(() => Number)
