@@ -581,23 +581,34 @@ export class AuthService {
       );
     }
 
-    const res = await fetch(
-      `https://codeforces.com/api/user.info?handles=${encodeURIComponent(user.codeforcesHandle)}`,
-      { signal: AbortSignal.timeout(8000) },
-    );
-    const data = await res.json();
-    if (data?.status !== 'OK' || !data.result?.[0]) {
-      throw new BadRequestException(
-        'Could not fetch Codeforces profile. Please try again.',
-      );
-    }
+    // Codeforces API may cache profile data for a few seconds after the user
+    // saves. Retry up to 3 times with 1.5s gaps so a save-then-immediately-
+    // verify flow succeeds without requiring a manual second attempt.
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY = 1500;
+    let firstName = '';
 
-    const cfUser = data.result[0];
-    const firstName = cfUser.firstName ?? '';
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const res = await fetch(
+        `https://codeforces.com/api/user.info?handles=${encodeURIComponent(user.codeforcesHandle)}`,
+        { signal: AbortSignal.timeout(8000) },
+      );
+      const data = await res.json();
+      if (data?.status !== 'OK' || !data.result?.[0]) {
+        throw new BadRequestException(
+          'Could not fetch Codeforces profile. Please try again.',
+        );
+      }
+      firstName = (data.result[0].firstName ?? '').trim();
+      if (firstName === user.verificationCode) break;
+      if (attempt < MAX_ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY));
+      }
+    }
 
     if (firstName !== user.verificationCode) {
       throw new BadRequestException(
-        'Verification code not found in your Codeforces first name. Make sure you saved the changes and the code matches exactly.',
+        'Verification code not found in your Codeforces first name. Make sure you saved the changes on Codeforces, then try again.',
       );
     }
 
