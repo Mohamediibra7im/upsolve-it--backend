@@ -168,6 +168,21 @@ export class RoadmapPublicController {
     );
   }
 
+  @Post('topics/:topicId/complete-learning')
+  async completeLearning(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('topicId') topicId: string,
+    @Query('language') language: 'Arabic' | 'English' | undefined,
+    @Req() req: any,
+  ) {
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req.cookies?.accessToken,
+    );
+    if (!userId) throw new UnauthorizedException('Unauthorized');
+    return await this.progress.completeLearning(userId, topicId, language);
+  }
+
   @Post('topics/:topicId/reset-learning')
   async resetTopicLearning(
     @Headers('authorization') authorization: string | undefined,

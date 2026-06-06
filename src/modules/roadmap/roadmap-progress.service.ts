@@ -532,7 +532,7 @@ export class RoadmapProgressService {
 
     const watchPct = Math.min(
       100,
-      Math.max(0, dto.watchPct ?? existing?.watchPct ?? 0),
+      Math.max(existing?.watchPct ?? 0, dto.watchPct ?? existing?.watchPct ?? 0),
     );
     const lastPositionSec = Math.max(
       0,
@@ -1128,6 +1128,84 @@ export class RoadmapProgressService {
     if (inserts.length === 0) return { count: 0 };
     await this.problemModel.insertMany(inserts);
     return { count: inserts.length };
+  }
+
+  async completeLearning(
+    userId: string,
+    topicId: string,
+    language?: 'Arabic' | 'English',
+  ) {
+    const tId = this.toObjectId(topicId, 'Topic');
+    const topic = await this.topicModel.findById(tId).lean();
+    if (!topic) throw new NotFoundException('Topic not found');
+
+    const currentPct = await this.calculateLearningProgress(userId, tId, language);
+    if (currentPct < topic.requiredLearningPct) {
+      throw new BadRequestException(
+        `Must reach ${topic.requiredLearningPct}% learning progress first. Currently at ${currentPct}%.`,
+      );
+    }
+
+    const filter: Record<string, unknown> = { topicId: tId };
+    if (language) filter.language = language;
+    const resources = await this.resourceModel.find(filter).lean();
+    if (resources.length === 0) return { ok: true, xpEarned: 0, learningPct: 100 };
+
+    const userOid = new Types.ObjectId(userId);
+    let xpEarned = 0;
+
+    for (const resource of resources) {
+      const existing = await this.resourceProgressModel
+        .findOne({ userId: userOid, resourceId: resource._id })
+        .lean();
+
+      // For videos: contribution = weight * (watchPct / 100), so we need watchPct=100.
+      // Skip only when the video is already fully watched.
+      // For non-video resources: skip only when already completed.
+      const alreadyDone =
+        resource.type === 'Video'
+          ? (existing?.watchPct ?? 0) >= 100
+          : existing?.isCompleted === true;
+
+      if (alreadyDone) continue;
+
+      const updated = await this.resourceProgressModel.findOneAndUpdate(
+        { userId: userOid, resourceId: resource._id },
+        {
+          $set: {
+            watchPct: 100,
+            isCompleted: true,
+            completedAt: existing?.completedAt ?? new Date(),
+          },
+          $setOnInsert: { xpAwarded: false, lastPositionSec: 0 },
+        },
+        { upsert: true, returnDocument: 'after' },
+      );
+
+      if (updated && !updated.xpAwarded) {
+        const earned = await this.awardXp(
+          userId,
+          resource.xpReward ?? 10,
+          `Completed resource ${resource.title}`,
+          'resource',
+          resource._id,
+        );
+        xpEarned += earned;
+        await this.resourceProgressModel.updateOne(
+          { _id: updated._id },
+          { $set: { xpAwarded: true } },
+        );
+      }
+    }
+
+    const progressUpdates = await this.updateTopicAndLevelProgress(userId, tId, language);
+
+    return {
+      ok: true,
+      xpEarned: xpEarned + (progressUpdates?.xpEarned ?? 0),
+      learningPct: progressUpdates?.learningPct ?? 100,
+      isTopicComplete: progressUpdates?.isTopicComplete ?? false,
+    };
   }
 
   async resetTopicLearningProgress(
