@@ -76,7 +76,7 @@ export class ContactService {
           <div style="background-color: #f8fafc; padding: 20px; border-radius: 16px; margin: 24px 0; border: 1px solid #f1f5f9;">
             <p style="margin: 0; font-size: 13px; color: #64748b;"><strong>Logged Subject:</strong> ${data.subject}</p>
           </div>
-          <p style="font-size: 15px; line-height: 1.6; color: #334155;">In the meantime, you can access the core documentation at <a href="https://docs.hnuicpc.tech" style="color: #007F5F; text-decoration: none; font-weight: 600;">docs.hnuicpc.tech</a>.</p>
+
           <div style="margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 24px; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">
             Secure Link Established • Upsolve.it
           </div>
