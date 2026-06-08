@@ -15,6 +15,7 @@ import { TrainingLevelsModule } from './modules/training-levels/training-levels.
 import { FriendsModule } from './modules/friends/friends.module';
 import { RoadmapModule } from './modules/roadmap/roadmap.module';
 import { WhatsNewModule } from './modules/whats-new/whats-new.module';
+import { SuggestionsModule } from './modules/suggestions/suggestions.module';
 import { HealthModule } from './modules/health/health.module';
 import { LoggingMiddleware } from './common/middleware/logging.middleware';
 import { RateLimiterGuard } from './common/guards/rate-limiter.guard';
@@ -94,6 +95,7 @@ import { RateLimiterGuard } from './common/guards/rate-limiter.guard';
     FriendsModule,
     RoadmapModule,
     WhatsNewModule,
+    SuggestionsModule,
     HealthModule,
   ],
   controllers: [AppController],
