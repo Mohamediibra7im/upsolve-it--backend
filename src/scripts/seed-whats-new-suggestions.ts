@@ -1,11 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { getModelToken } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
 
 async function seed() {
   const app = await NestFactory.createApplicationContext(AppModule);
-  const model = app.get(getModelToken('WhatsNewEntry')) as Model<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const model = app.get(getModelToken('WhatsNewEntry')) as any;
 
   const entry = await model.findOne({ title: 'Suggested Websites' }).exec();
   if (entry) {
