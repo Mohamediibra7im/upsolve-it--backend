@@ -162,13 +162,27 @@ export class AuthService {
     });
     if (existing) throw new BadRequestException('Handle already exists');
 
-    const res = await fetch(
-      `https://codeforces.com/api/user.info?handles=${encodeURIComponent(codeforcesHandle)}`,
-      { signal: AbortSignal.timeout(8000) },
-    );
-    const data = await res.json();
+    let data: any;
+    try {
+      const res = await fetch(
+        `https://codeforces.com/api/user.info?handles=${encodeURIComponent(codeforcesHandle)}`,
+        { signal: AbortSignal.timeout(8000) },
+      );
+      data = await res.json();
+    } catch {
+      throw new BadRequestException(
+        'Unable to reach Codeforces API. Please try again later.',
+      );
+    }
+
     if (data?.status !== 'OK' || !data.result?.[0]) {
-      throw new BadRequestException('Invalid Codeforces handle');
+      const comment = data?.comment ?? '';
+      if (comment.includes('not found') || comment.includes('handle')) {
+        throw new BadRequestException('Invalid Codeforces handle');
+      }
+      throw new BadRequestException(
+        'Codeforces API is currently unavailable. Please try again later.',
+      );
     }
     const cfUser = data.result[0];
     const rating: number = Number(cfUser.rating) || 0;
@@ -258,13 +272,20 @@ export class AuthService {
       handle,
     )}&from=1&count=10`;
 
-    const submissionsRes = await fetch(submissionsUrl, {
-      signal: AbortSignal.timeout(8000),
-    });
+    let submissionsRes: Response;
+    try {
+      submissionsRes = await fetch(submissionsUrl, {
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch {
+      throw new BadRequestException(
+        'Unable to reach Codeforces API. Please try again later.',
+      );
+    }
     const submissionsData = await submissionsRes.json();
     if (submissionsData?.status !== 'OK') {
       throw new BadRequestException(
-        'Could not fetch submissions from Codeforces.',
+        'Codeforces API is currently unavailable. Please try again.',
       );
     }
 
@@ -386,15 +407,24 @@ export class AuthService {
       };
     }
 
-    const res = await fetch(
-      `https://codeforces.com/api/user.info?handles=${encodeURIComponent(
-        user.codeforcesHandle,
-      )}`,
-      { signal: AbortSignal.timeout(8000) },
-    );
-    const data = await res.json();
+    let data: any;
+    try {
+      const res = await fetch(
+        `https://codeforces.com/api/user.info?handles=${encodeURIComponent(
+          user.codeforcesHandle,
+        )}`,
+        { signal: AbortSignal.timeout(8000) },
+      );
+      data = await res.json();
+    } catch {
+      throw new BadRequestException(
+        'Unable to reach Codeforces API. Please try again later.',
+      );
+    }
     if (data?.status !== 'OK' || !data.result?.[0]) {
-      throw new BadRequestException('Failed to sync profile data');
+      throw new BadRequestException(
+        'Codeforces API is currently unavailable. Please try again later.',
+      );
     }
     const cfUser = data.result[0];
 
@@ -589,14 +619,21 @@ export class AuthService {
     let firstName = '';
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      const res = await fetch(
-        `https://codeforces.com/api/user.info?handles=${encodeURIComponent(user.codeforcesHandle)}`,
-        { signal: AbortSignal.timeout(8000) },
-      );
+      let res: Response;
+      try {
+        res = await fetch(
+          `https://codeforces.com/api/user.info?handles=${encodeURIComponent(user.codeforcesHandle)}`,
+          { signal: AbortSignal.timeout(8000) },
+        );
+      } catch {
+        throw new BadRequestException(
+          'Unable to reach Codeforces API. Please try again later.',
+        );
+      }
       const data = await res.json();
       if (data?.status !== 'OK' || !data.result?.[0]) {
         throw new BadRequestException(
-          'Could not fetch Codeforces profile. Please try again.',
+          'Codeforces API is currently unavailable. Please try again.',
         );
       }
       firstName = (data.result[0].firstName ?? '').trim();
