@@ -616,14 +616,24 @@ export class AdminService {
     const user = await this.userModel.findById(uid);
     if (!user) throw new NotFoundException('User not found');
 
-    const res = await fetch(
-      `https://codeforces.com/api/user.info?handles=${encodeURIComponent(
-        user.codeforcesHandle,
-      )}`,
-    );
-    const data = await res.json();
+    let data: any;
+    try {
+      const res = await fetch(
+        `https://codeforces.com/api/user.info?handles=${encodeURIComponent(
+          user.codeforcesHandle,
+        )}`,
+        { signal: AbortSignal.timeout(8000) },
+      );
+      data = await res.json();
+    } catch {
+      throw new BadRequestException(
+        'Unable to reach Codeforces API. Please try again later.',
+      );
+    }
     if (data?.status !== 'OK' || !data.result?.[0]) {
-      throw new BadRequestException('Failed to sync rating from Codeforces');
+      throw new BadRequestException(
+        'Codeforces API is currently unavailable. Please try again later.',
+      );
     }
     const cfUser = data.result[0];
 
@@ -687,12 +697,22 @@ export class AdminService {
 
     // Build handles list and fetch from Codeforces in one call
     const handles = users.map((u) => u.codeforcesHandle).join(';');
-    const res = await fetch(
-      `https://codeforces.com/api/user.info?handles=${encodeURIComponent(handles)}`,
-    );
-    const data = await res.json();
+    let data: any;
+    try {
+      const res = await fetch(
+        `https://codeforces.com/api/user.info?handles=${encodeURIComponent(handles)}`,
+        { signal: AbortSignal.timeout(8000) },
+      );
+      data = await res.json();
+    } catch {
+      throw new BadRequestException(
+        'Unable to reach Codeforces API. Please try again later.',
+      );
+    }
     if (data?.status !== 'OK' || !data.result?.length) {
-      throw new BadRequestException('Failed to fetch ratings from Codeforces');
+      throw new BadRequestException(
+        'Codeforces API is currently unavailable. Please try again later.',
+      );
     }
 
     // Map CF results by handle (lowercase) for easy lookup

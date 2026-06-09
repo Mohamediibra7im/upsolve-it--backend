@@ -179,11 +179,18 @@ export class RoadmapProgressService {
     const url = `https://codeforces.com/api/user.status?handle=${encodeURIComponent(
       handle,
     )}&from=1&count=${MAX_STATUS_COUNT}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    const data = await res.json();
+    let data: any;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      data = await res.json();
+    } catch {
+      throw new BadRequestException(
+        'Unable to reach Codeforces API. Please try again later.',
+      );
+    }
     if (data?.status !== 'OK') {
       throw new BadRequestException(
-        'Failed to fetch submissions from Codeforces',
+        'Codeforces API is currently unavailable. Please try again later.',
       );
     }
     const solved = new Set<string>();
@@ -1077,11 +1084,18 @@ export class RoadmapProgressService {
 
     const contestId = dto.contestId;
     const url = `https://codeforces.com/api/contest.standings?contestId=${contestId}`;
-    const res = await fetch(url);
-    const data = await res.json();
+    let data: any;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      data = await res.json();
+    } catch {
+      throw new BadRequestException(
+        'Unable to reach Codeforces API. Please try again later.',
+      );
+    }
     if (data?.status !== 'OK') {
       throw new BadRequestException(
-        'Contest details could not be retrieved from Codeforces.',
+        'Codeforces API is currently unavailable. Please try again later.',
       );
     }
 
