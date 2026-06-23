@@ -38,9 +38,10 @@ async function bootstrap() {
     'http://localhost:3001',
     'http://127.0.0.1:3000',
     'https://upsolve-iit.vercel.app',
+    'https://upsolve-it.hnuicpc.tech',
   ].filter(Boolean);
 
-  const vercelWildcard = /^https?:\/\/[a-zA-Z0-9.-]+\.vercel\.app$/;
+  const vercelWildcard = /^https?:\/\/[a-zA-Z0-9.-]+\.(vercel\.app|hnuicpc\.tech)$/;
 
   app.enableCors({
     origin: (origin, callback) => {
