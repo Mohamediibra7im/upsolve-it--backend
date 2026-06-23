@@ -31,17 +31,20 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  const allowedOrigins = [
+  const staticOrigins = [
     frontendOrigin,
     appUrl,
     'http://localhost:3000',
     'http://localhost:3001',
     'http://127.0.0.1:3000',
+    'https://upsolve-iit.vercel.app',
   ].filter(Boolean);
+
+  const vercelWildcard = /^https?:\/\/[a-zA-Z0-9.-]+\.vercel\.app$/;
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || staticOrigins.includes(origin) || vercelWildcard.test(origin)) {
         callback(null, true);
       } else {
         logger.warn(`CORS blocked origin: ${origin}`);
