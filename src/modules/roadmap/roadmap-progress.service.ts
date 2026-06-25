@@ -1006,8 +1006,8 @@ export class RoadmapProgressService {
     },
     userId?: string,
   ) {
-    const pageSize = Math.min(parseInt(query.limit, 10) || 20, 200);
-    const page = Math.max(parseInt(query.page, 10) || 1, 1);
+    const pageSize = Math.min(parseInt(query.limit ?? '20', 10) || 20, 200);
+    const page = Math.max(parseInt(query.page ?? '1', 10) || 1, 1);
     const skip = (page - 1) * pageSize;
 
     // Total count for pagination metadata

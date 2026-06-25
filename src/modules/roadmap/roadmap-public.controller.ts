@@ -50,7 +50,7 @@ export class RoadmapPublicController {
 
     return await this.progress.getLeaderboard(
       { level, period, limit, page },
-      userId,
+      userId ?? undefined,
     );
   }
 
