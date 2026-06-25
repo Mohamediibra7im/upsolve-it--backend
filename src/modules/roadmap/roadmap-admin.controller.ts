@@ -20,6 +20,7 @@ import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
+import { GrantLevelAccessDto } from './dto/grant-level-access.dto';
 import { ReorderDto } from './dto/reorder.dto';
 import { ImportProblemsDto } from './dto/import-problems.dto';
 import { DeleteProblemsDto } from './dto/delete-problems.dto';
@@ -94,6 +95,44 @@ export class RoadmapAdminController {
       adminId: String(current._id),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
+  }
+
+  // === GRANT / REVOKE ACCESS ===
+
+  @Post('levels/:id/grant')
+  async grantLevelAccess(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('id') id: string,
+    @Body() body: GrantLevelAccessDto,
+    @Req() req: any,
+  ) {
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
+    const level = await this.roadmap.grantLevelAccess(id, body.userIds, {
+      adminId: String(current._id),
+      adminHandle: current.codeforcesHandle ?? 'admin',
+    });
+    return { level };
+  }
+
+  @Post('levels/:id/revoke')
+  async revokeLevelAccess(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('id') id: string,
+    @Body() body: GrantLevelAccessDto,
+    @Req() req: any,
+  ) {
+    const current = await this.admin.requireAdmin(
+      authorization,
+      req.cookies?.accessToken,
+    );
+    const level = await this.roadmap.revokeLevelAccess(id, body.userIds, {
+      adminId: String(current._id),
+      adminHandle: current.codeforcesHandle ?? 'admin',
+    });
+    return { level };
   }
 
   // === TOPICS ===

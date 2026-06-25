@@ -369,6 +369,75 @@ export class RoadmapAdminService {
     return { ok: true };
   }
 
+  // === GRANT / REVOKE ACCESS ===
+
+  async grantLevelAccess(
+    levelId: string,
+    userIds: string[],
+    audit?: RoadmapAdminAudit,
+  ) {
+    const id = this.toObjectId(levelId, 'Level');
+    const level = await this.levelModel.findById(id);
+    if (!level) throw new NotFoundException('Level not found');
+
+    const oids = userIds.map((uid) => new Types.ObjectId(uid));
+    for (const oid of oids) {
+      if (!level.allowedUserIds?.some((existing) => existing.equals(oid))) {
+        level.allowedUserIds.push(oid);
+      }
+    }
+    level.visibility = 'specific_users';
+    await level.save();
+
+    if (audit) {
+      await this.auditLogs.logAction(
+        'GRANT_LEVEL_ACCESS',
+        'RoadmapLevel',
+        audit.adminId,
+        audit.adminHandle,
+        { levelId: String(level._id), grantedUserIds: userIds },
+        level._id,
+      );
+    }
+
+    return level;
+  }
+
+  async revokeLevelAccess(
+    levelId: string,
+    userIds: string[],
+    audit?: RoadmapAdminAudit,
+  ) {
+    const id = this.toObjectId(levelId, 'Level');
+    const level = await this.levelModel.findById(id);
+    if (!level) throw new NotFoundException('Level not found');
+
+    const revokeSet = new Set(userIds.map((uid) => String(uid)));
+    level.allowedUserIds =
+      level.allowedUserIds?.filter(
+        (existing) => !revokeSet.has(String(existing)),
+      ) ?? [];
+
+    if (level.allowedUserIds.length === 0) {
+      level.visibility = 'all';
+    }
+
+    await level.save();
+
+    if (audit) {
+      await this.auditLogs.logAction(
+        'REVOKE_LEVEL_ACCESS',
+        'RoadmapLevel',
+        audit.adminId,
+        audit.adminHandle,
+        { levelId: String(level._id), revokedUserIds: userIds },
+        level._id,
+      );
+    }
+
+    return level;
+  }
+
   // === TOPIC MANAGEMENT ===
 
   async listTopics(levelId: string) {

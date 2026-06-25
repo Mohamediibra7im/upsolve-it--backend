@@ -171,6 +171,10 @@ export class RoadmapPublicService {
       ...l,
       topicsCount: countMap.get(String(l._id)) ?? 0,
       topicsUnlockedCount: completedCountByLevel.get(String(l._id)) ?? 0, // In user listing, show completed topics count
+      isGranted:
+        !!userId &&
+        l.visibility === 'specific_users' &&
+        l.allowedUserIds?.some((id) => String(id) === userId),
     }));
   }
 
