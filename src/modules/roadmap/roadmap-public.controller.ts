@@ -39,8 +39,19 @@ export class RoadmapPublicController {
     @Query('level') level?: string,
     @Query('period') period?: string,
     @Query('limit') limit?: string,
+    @Query('page') page?: string,
+    @Headers('authorization') authorization?: string,
+    @Req() req?: any,
   ) {
-    return await this.progress.getLeaderboard({ level, period, limit });
+    const userId = await this.roadmap.resolveUserId(
+      authorization,
+      req?.cookies?.accessToken,
+    ).catch(() => undefined);
+
+    return await this.progress.getLeaderboard(
+      { level, period, limit, page },
+      userId,
+    );
   }
 
   @Get('users/:userId/stats')

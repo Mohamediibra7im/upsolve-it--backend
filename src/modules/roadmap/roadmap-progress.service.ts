@@ -997,39 +997,61 @@ export class RoadmapProgressService {
     return { problemDates, topicDates };
   }
 
-  async getLeaderboard(query: {
-    level?: string;
-    period?: string;
-    limit?: string;
-  }) {
-    const limit = query.limit
-      ? Math.min(parseInt(query.limit, 10) || 200, 200)
-      : 200;
+  async getLeaderboard(
+    query: {
+      level?: string;
+      period?: string;
+      page?: string;
+      limit?: string;
+    },
+    userId?: string,
+  ) {
+    const pageSize = Math.min(parseInt(query.limit, 10) || 20, 200);
+    const page = Math.max(parseInt(query.page, 10) || 1, 1);
+    const skip = (page - 1) * pageSize;
 
-    // Always use user_xp.totalXp as the source of truth — it stays in sync
-    // even after XP revocations (which delete transactions but decrement totalXp).
-    // Aggregating transactions would show a different (higher) value after any revoke.
+    // Total count for pagination metadata
+    const total = await this.xpModel.countDocuments({});
+    const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+
+    // Top 3 always fetched for podium, regardless of current page
+    const top3Docs = await this.xpModel
+      .find({})
+      .sort({ totalXp: -1 })
+      .limit(3)
+      .lean();
+
+    // Paginated entries for current page
     const xpDocs = await this.xpModel
       .find({})
       .sort({ totalXp: -1 })
-      .limit(limit)
+      .skip(skip)
+      .limit(pageSize)
       .lean();
 
-    if (xpDocs.length === 0) return { leaderboard: [] };
+    if (total === 0) {
+      return { leaderboard: [], top3: [], total, page, pageSize, totalPages, myRank: null };
+    }
 
-    const userIds = xpDocs.map((x) => x.userId);
+    // Collect all unique userIds from both top3 and current page
+    const allUserIds = [
+      ...new Set([
+        ...xpDocs.map((x) => x.userId),
+        ...top3Docs.map((x) => x.userId),
+      ]),
+    ];
 
     const [users, topicCounts, problemCounts] = await Promise.all([
       this.userModel
-        .find({ _id: { $in: userIds } })
+        .find({ _id: { $in: allUserIds } })
         .select('codeforcesHandle avatar')
         .lean(),
       this.topicProgressModel.aggregate([
-        { $match: { userId: { $in: userIds }, isTopicComplete: true } },
+        { $match: { userId: { $in: allUserIds }, isTopicComplete: true } },
         { $group: { _id: '$userId', count: { $sum: 1 } } },
       ]),
       this.problemProgressModel.aggregate([
-        { $match: { userId: { $in: userIds }, isSolved: true } },
+        { $match: { userId: { $in: allUserIds }, isSolved: true } },
         { $group: { _id: '$userId', count: { $sum: 1 } } },
       ]),
     ]);
@@ -1042,24 +1064,47 @@ export class RoadmapProgressService {
       problemCounts.map((p: { _id: any; count: number }) => [String(p._id), p.count]),
     );
 
-    const leaderboard: any[] = [];
-    let rank = 1;
-    for (const xp of xpDocs) {
+    const buildEntry = (xp: { userId: any; totalXp: number }, rank: number) => {
       const u = userMap.get(String(xp.userId));
-      if (!u) continue;
-
-      leaderboard.push({
+      if (!u) return null;
+      return {
         userId: String(xp.userId),
         handle: u.codeforcesHandle ?? 'Anonymous',
         avatar: u.avatar || null,
         totalXp: xp.totalXp,
         topicsDone: topicMap.get(String(xp.userId)) ?? 0,
         problemsSolved: problemMap.get(String(xp.userId)) ?? 0,
-        rank: rank++,
-      });
+        rank,
+      };
+    };
+
+    // Build top3 with global ranks 1-3
+    const top3: any[] = [];
+    for (let i = 0; i < top3Docs.length; i++) {
+      const entry = buildEntry(top3Docs[i], i + 1);
+      if (entry) top3.push(entry);
     }
 
-    return { leaderboard };
+    // Build paginated leaderboard with correct global ranks
+    const leaderboard: any[] = [];
+    let rank = skip + 1;
+    for (const xp of xpDocs) {
+      const entry = buildEntry(xp, rank);
+      if (entry) leaderboard.push(entry);
+      rank++;
+    }
+
+    // Calculate current user's rank
+    let myRank: number | null = null;
+    if (userId) {
+      const userXp = await this.xpModel.findOne({ userId }).select('totalXp').lean();
+      if (userXp) {
+        const higherCount = await this.xpModel.countDocuments({ totalXp: { $gt: userXp.totalXp } });
+        myRank = higherCount + 1;
+      }
+    }
+
+    return { leaderboard, top3, total, page, pageSize, totalPages, myRank };
   }
 
   private async getMaxOrderIndex(
