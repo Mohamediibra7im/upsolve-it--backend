@@ -153,7 +153,7 @@ export class AdminController {
     @Req() req: any,
   ) {
     await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
-    return this.contact.listMessages();
+    return { messages: await this.contact.listMessages() };
   }
 
   @Patch('contact/:id/read')
