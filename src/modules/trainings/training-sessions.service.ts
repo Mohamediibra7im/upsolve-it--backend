@@ -206,6 +206,22 @@ export class TrainingSessionsService {
     );
     session.status = 'completed';
     session.reviewGenerated = true;
+
+    // ponytail: contest modes use incremental (delta) time, not CF cumulative.
+    // Each problem's time = time since previous AC (or session start for first).
+    if (['ladder', 'contest'].includes(session.trainingMode)) {
+      let prev = session.startTime;
+      const solved = session.problems
+        .filter((p) => isProblemMarkedSolved(p) && p.solvedAt != null)
+        .sort((a, b) => (a.solvedAt ?? 0) - (b.solvedAt ?? 0));
+      for (const p of solved) {
+        const incremental = Math.max(0, Math.round(((p.solvedAt ?? prev) - prev) / 1000));
+        p.timeSpentSeconds = incremental;
+        p.speedStatus = computeSpeedStatus(true, incremental, p.expectedTimeSeconds ?? expectedTimeSecondsFromRating(p.rating ?? 0));
+        prev = p.solvedAt ?? prev;
+      }
+    }
+
     session.markModified('problems');
     await session.save();
 
@@ -260,11 +276,13 @@ export class TrainingSessionsService {
     const user = await this.userModel.findById(userId);
     const userRating = user?.rating ?? 1500;
 
+    const contestModes: TrainingMode[] = ['ladder', 'contest'];
     const problems = session.problems ?? [];
-    const totalTime = problems.reduce(
-      (acc, p) => acc + (p.timeSpentSeconds ?? 0),
-      0,
-    );
+    const totalTime = contestModes.includes(session.trainingMode)
+      ? Math.round((session.endTime - session.startTime) / 1000)
+      : problems.reduce((acc, p) => acc + (p.timeSpentSeconds ?? 0), 0);
+    // ponytail: contest modes use session duration as totalTime.
+    // Sum of per-problem CF timestamps is meaningless (each is from session start).
 
     const problemReviews = problems.map((p) => {
       const solvedFlag = isProblemMarkedSolved(p);
