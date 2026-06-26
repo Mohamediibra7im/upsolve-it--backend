@@ -195,15 +195,22 @@ export class TrainingSessionsService {
     }
 
     session.solvedCount = session.problems.filter(isProblemMarkedSolved).length;
-    session.performance = computeSessionPerformance(
-      {
-        startTime: session.startTime,
-        endTime: session.endTime,
-        customRatings: session.customRatings,
-        problems: session.problems,
-      },
-      userRating,
-    );
+    // ponytail: 0-solve sessions get neutral performance (user's rating).
+    // computeSessionPerformance penalizes unsolved problems and produces
+    // ~600 for 0 solves, which drags down averages on abandoned sessions.
+    if (session.solvedCount === 0) {
+      session.performance = userRating;
+    } else {
+      session.performance = computeSessionPerformance(
+        {
+          startTime: session.startTime,
+          endTime: session.endTime,
+          customRatings: session.customRatings,
+          problems: session.problems,
+        },
+        userRating,
+      );
+    }
     session.status = 'completed';
     session.reviewGenerated = true;
 
