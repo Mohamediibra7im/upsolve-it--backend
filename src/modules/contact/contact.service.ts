@@ -128,4 +128,36 @@ export class ContactService {
   async markAsRead(id: string) {
     return this.contactModel.findByIdAndUpdate(id, { read: true }, { new: true }).lean();
   }
+
+  async sendReply(id: string, replyBody: string) {
+    const msg = await this.contactModel.findById(id).lean();
+    if (!msg) throw new Error('Message not found');
+
+    const smtpEmail = this.config.get<string>('SMTP_EMAIL')!;
+    const transporter = this.transporter();
+
+    await transporter.sendMail({
+      from: `"Upsolve.it Support" <${smtpEmail}>`,
+      to: msg.email,
+      subject: `Re: ${msg.subject}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; padding: 40px; border-radius: 24px; background-color: #ffffff; color: #0f172a;">
+          <h2 style="font-size: 20px; font-weight: 800; text-transform: uppercase; color: #007F5F; margin: 0 0 16px 0;">Reply from Upsolve.it</h2>
+          <p style="font-size: 15px; line-height: 1.6; color: #334155;">Hello <strong>${msg.name}</strong>,</p>
+          <div style="font-size: 15px; line-height: 1.6; color: #334155; white-space: pre-wrap; margin: 16px 0;">${replyBody}</div>
+          <div style="border-top: 1px solid #f1f5f9; padding-top: 24px; margin-top: 32px;">
+            <p style="font-size: 12px; color: #94a3b8;">Your original message:</p>
+            <div style="background-color: #f8fafc; padding: 16px; border-radius: 12px; margin-top: 8px; border: 1px solid #f1f5f9;">
+              <p style="font-size: 13px; color: #64748b; white-space: pre-wrap;">${msg.message}</p>
+            </div>
+          </div>
+          <div style="margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 24px; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">
+            Upsolve.it Support • HNU ICPC COMMUNITY
+          </div>
+        </div>
+      `,
+    });
+
+    return { success: true };
+  }
 }

@@ -165,4 +165,15 @@ export class AdminController {
     await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return this.contact.markAsRead(id);
   }
+
+  @Post('contact/:id/reply')
+  async replyContactMessage(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('id') id: string,
+    @Body('message') message: string,
+    @Req() req: any,
+  ) {
+    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    return this.contact.sendReply(id, message);
+  }
 }
