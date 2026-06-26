@@ -1,0 +1,176 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+} from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { ConfigService } from '@nestjs/config';
+import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { InitiateResetDto } from './dto/initiate-reset.dto';
+import { VerifySubmissionDto } from './dto/verify-submission.dto';
+import { ResetPinDto } from './dto/reset-pin.dto';
+
+type RequestWithCookies = Request & {
+  cookies?: { refreshToken?: string; accessToken?: string };
+};
+
+@Controller('auth')
+export class AuthController {
+  constructor(
+    private readonly auth: AuthService,
+    private readonly config: ConfigService,
+  ) {}
+
+  @Post('register')
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.register(
+      dto.codeforcesHandle,
+      dto.password,
+      dto.confirmPassword,
+    );
+    this.setRefreshCookie(res, result.refreshToken);
+    this.setAccessTokenCookie(res, result.token);
+    return { user: result.user };
+  }
+
+  @Post('login')
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const ip =
+      req.header('x-forwarded-for') ?? req.header('x-real-ip') ?? 'unknown';
+    const result = await this.auth.login(
+      dto.codeforcesHandle,
+      dto.password,
+      ip,
+    );
+    this.setRefreshCookie(res, result.refreshToken);
+    this.setAccessTokenCookie(res, result.token);
+    return { user: result.user };
+  }
+
+  @Post('refresh')
+  async refresh(
+    @Req() req: RequestWithCookies,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) throw new UnauthorizedException('Missing refresh');
+    const ip =
+      req.header('x-forwarded-for') ?? req.header('x-real-ip') ?? 'unknown';
+    const userAgent = req.header('user-agent') ?? 'unknown';
+    const result = await this.auth.refresh(refreshToken, ip, userAgent);
+    this.setRefreshCookie(res, result.refreshToken);
+    this.setAccessTokenCookie(res, result.token);
+    return { user: result.user };
+  }
+
+  @Post('logout')
+  async logout(
+    @Req() req: RequestWithCookies,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
+    const refreshToken = req.cookies?.refreshToken;
+    if (refreshToken) await this.auth.logout(refreshToken);
+    res.clearCookie('refreshToken', {
+      path: '/',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+    });
+    res.clearCookie('accessToken', {
+      path: '/',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+    });
+    return { ok: true };
+  }
+
+  @Get('health')
+  health() {
+    return { ok: true };
+  }
+
+  @Post('initiate-reset')
+  async initiateReset(@Body() dto: InitiateResetDto) {
+    return await this.auth.initiateReset(dto.handle);
+  }
+
+  @Post('verify-submission')
+  async verifySubmission(@Body() dto: VerifySubmissionDto) {
+    return await this.auth.verifySubmission(dto.verificationToken);
+  }
+
+  @Post('reset-pin')
+  async resetPin(@Req() req: RequestWithCookies, @Body() dto: ResetPinDto) {
+    const accessToken =
+      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
+      req.cookies?.accessToken;
+    return await this.auth.resetPin({
+      resetToken: dto.resetToken,
+      newPassword: dto.newPassword,
+      oldPassword: dto.oldPassword,
+      accessToken,
+    });
+  }
+
+  @Post('sync-profile')
+  async syncProfile(@Req() req: RequestWithCookies) {
+    const token =
+      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
+      req.cookies?.accessToken;
+    if (!token) throw new UnauthorizedException('Unauthorized');
+    return await this.auth.syncProfile(token);
+  }
+
+  @Post('generate-verification-code')
+  async generateVerificationCode(@Req() req: RequestWithCookies) {
+    const token =
+      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
+      req.cookies?.accessToken;
+    if (!token) throw new UnauthorizedException('Unauthorized');
+    return await this.auth.generateVerificationCode(token);
+  }
+
+  @Post('verify-codeforces-profile')
+  async verifyCodeforcesProfile(@Req() req: RequestWithCookies) {
+    const token =
+      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
+      req.cookies?.accessToken;
+    if (!token) throw new UnauthorizedException('Unauthorized');
+    return await this.auth.verifyCodeforcesProfile(token);
+  }
+
+  private setRefreshCookie(res: Response, refreshTokenValue: string) {
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
+    res.cookie('refreshToken', refreshTokenValue, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+  }
+
+  private setAccessTokenCookie(res: Response, accessTokenValue: string) {
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
+    res.cookie('accessToken', accessTokenValue, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      maxAge: 15 * 60 * 1000,
+      path: '/',
+    });
+  }
+}
