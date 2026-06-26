@@ -1,6 +1,12 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
+import {
+  ContactMessage,
+  type ContactMessageDocument,
+} from './schemas/contact-message.schema';
 
 export type ContactFormData = {
   name: string;
@@ -12,7 +18,11 @@ export type ContactFormData = {
 
 @Injectable()
 export class ContactService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    @InjectModel(ContactMessage.name)
+    private readonly contactModel: Model<ContactMessageDocument>,
+  ) {}
 
   private transporter() {
     const email = this.config.get<string>('SMTP_EMAIL');
@@ -29,6 +39,9 @@ export class ContactService {
   }
 
   async sendContactEmail(data: ContactFormData) {
+    // ponytail: store every contact submission so admin can review in panel.
+    await this.contactModel.create(data);
+
     const smtpEmail = this.config.get<string>('SMTP_EMAIL')!;
     const transporter = this.transporter();
 
@@ -83,5 +96,36 @@ export class ContactService {
         </div>
       `,
     });
+
+    // ponytail: notify admin when new support message arrives.
+    const notifyEmail = this.config.get<string>('NOTIFICATION_EMAIL');
+    if (notifyEmail && notifyEmail !== smtpEmail) {
+      await transporter.sendMail({
+        from: `"Upsolve.it Support" <${smtpEmail}>`,
+        to: notifyEmail,
+        subject: `[Admin] New support message from ${data.name}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 500px; padding: 24px;">
+            <p><strong>From:</strong> ${data.name} (${data.email})</p>
+            <p><strong>Subject:</strong> ${data.subject}</p>
+            <p><strong>Category:</strong> ${data.category}</p>
+            <hr/>
+            <p>${data.message.replace(/\n/g, '<br/>')}</p>
+            <hr/>
+            <p style="font-size: 12px; color: #666;">
+              Reply from the admin panel at /admin/contact.
+            </p>
+          </div>
+        `,
+      });
+    }
+  }
+
+  async listMessages() {
+    return this.contactModel.find().sort({ createdAt: -1 }).lean();
+  }
+
+  async markAsRead(id: string) {
+    return this.contactModel.findByIdAndUpdate(id, { read: true }, { new: true }).lean();
   }
 }

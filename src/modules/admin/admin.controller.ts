@@ -11,6 +11,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { ContactService } from '../contact/contact.service';
 import { TrainingLevelsService } from '../training-levels/training-levels.service';
 import { ReplaceLevelsBodyDto } from '../training-levels/dto/replace-levels.dto';
 
@@ -19,6 +20,7 @@ export class AdminController {
   constructor(
     private readonly admin: AdminService,
     private readonly trainingLevels: TrainingLevelsService,
+    private readonly contact: ContactService,
   ) {}
 
   @Get('stats')
@@ -143,5 +145,24 @@ export class AdminController {
       offset ? Number.parseInt(offset) : undefined,
       { action, entity, performedByHandle },
     );
+  }
+
+  @Get('contact')
+  async listContactMessages(
+    @Headers('authorization') authorization: string | undefined,
+    @Req() req: any,
+  ) {
+    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    return this.contact.listMessages();
+  }
+
+  @Patch('contact/:id/read')
+  async markContactRead(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
+    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+    return this.contact.markAsRead(id);
   }
 }

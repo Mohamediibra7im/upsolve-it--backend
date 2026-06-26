@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
+import { ContactModule } from '../contact/contact.module';
 import { User, UserSchema } from '../auth/schemas/user.schema';
 import { Training, TrainingSchema } from '../trainings/schemas/training.schema';
 import {
@@ -30,6 +31,7 @@ import {
     AuthModule,
     AuditLogsModule,
     TrainingLevelsModule,
+    ContactModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Training.name, schema: TrainingSchema },
