@@ -109,7 +109,7 @@ Rate limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-R
    PORT=5000
    MONGODB_URI=your_mongodb_uri
    JWT_SECRET=your_secret
-   SMTP_EMAIL=fcsithnucommunty@gmail.com
+   SMTP_EMAIL=upsolve.it.1@gmail.com
    SMTP_PASSWORD=your_app_password
    FRONTEND_ORIGIN=http://localhost:3000
    ```
