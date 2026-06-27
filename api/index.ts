@@ -25,7 +25,25 @@ async function createApp() {
     const config = nestApp.get(ConfigService);
     const logger = nestApp.get(Logger);
 
-    nestApp.use(helmet());
+    nestApp.use(
+        helmet({
+            contentSecurityPolicy: {
+                directives: {
+                    'default-src': ["'self'"],
+                    'base-uri': ["'self'"],
+                    'font-src': ["'self'", 'https:', 'data:'],
+                    'form-action': ["'self'"],
+                    'frame-ancestors': ["'self'"],
+                    'img-src': ["'self'", 'data:', 'https:'],
+                    'object-src': ["'none'"],
+                    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+                    'script-src-attr': ["'unsafe-inline'"],
+                    'style-src': ["'self'", 'https:', "'unsafe-inline'"],
+                    'upgrade-insecure-requests': [],
+                },
+            },
+        }),
+    );
     nestApp.use(cookieParser());
     nestApp.useGlobalPipes(
         new ValidationPipe({
