@@ -29,11 +29,7 @@ export class TrainingsService {
   ) {}
 
   async getUserFromAuthHeader(authHeader?: string, accessTokenCookie?: string) {
-    const token = authHeader?.split(' ')[1] ?? accessTokenCookie;
-    if (!token) return null;
-    const decoded = await this.auth.verifyAccessToken(token);
-    if (!decoded) return null;
-    return await this.userModel.findById(decoded.userId);
+    return this.auth.getUserFromAuthHeader(authHeader, accessTokenCookie);
   }
 
   async createTraining(userId: string, body: Record<string, any>) {

@@ -2,14 +2,17 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Patch,
   Post,
   Put,
   Query,
-  Req,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { AdminGuard } from '../../common/guards/admin.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User, type UserDocument } from '../auth/schemas/user.schema';
 import { AdminService } from './admin.service';
 import { ContactService } from '../contact/contact.service';
 import { TrainingLevelsService } from '../training-levels/training-levels.service';
@@ -23,123 +26,114 @@ export class AdminController {
     private readonly contact: ContactService,
   ) {}
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Get('stats')
-  async stats(
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
-  ) {
-    await this.admin.requireAdmin(authorization, req?.cookies?.accessToken);
+  async stats() {
     return await this.admin.stats();
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Get('users')
   async users(
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    await this.admin.requireAdmin(authorization, req?.cookies?.accessToken);
-    return await this.admin.listUsers();
+    return await this.admin.listUsers(Number(page) || 1, Number(limit) || 50);
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('users')
   async updateRole(
-    @Headers('authorization') authorization: string | undefined,
     @Body() body: { userId: string; role: 'admin' | 'user' },
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     return await this.admin.updateUserRole(
-      String(current._id),
+      current._id.toString(),
       body.userId,
       body.role,
     );
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Get('users/:userId/stats')
   async userStats(
-    @Headers('authorization') authorization: string | undefined,
     @Param('userId') userId: string,
-    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.admin.userStats(userId);
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('users/:userId/sync')
   async syncUserRating(
-    @Headers('authorization') authorization: string | undefined,
     @Param('userId') userId: string,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    return await this.admin.syncUserRating(String(current._id), userId);
+    return await this.admin.syncUserRating(current._id.toString(), userId);
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('users/sync-batch')
   async syncBatchUserRatings(
-    @Headers('authorization') authorization: string | undefined,
     @Body() body: { userIds: string[] },
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     return await this.admin.syncBatchUserRatings(
-      String(current._id),
+      current._id.toString(),
       body.userIds,
     );
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
+  @Patch('users/:userId/lock')
+  async lockUser(
+    @Param('userId') userId: string,
+    @CurrentUser() current: UserDocument,
+  ) {
+    return await this.admin.lockUser(current._id.toString(), userId);
+  }
+
+  @UseGuards(AuthGuard, AdminGuard)
+  @Patch('users/:userId/unlock')
+  async unlockUser(
+    @Param('userId') userId: string,
+    @CurrentUser() current: UserDocument,
+  ) {
+    return await this.admin.unlockUser(current._id.toString(), userId);
+  }
+
+  @UseGuards(AuthGuard, AdminGuard)
   @Put('levels')
   async replaceTrainingLevels(
-    @Headers('authorization') authorization: string | undefined,
     @Body() body: ReplaceLevelsBodyDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     return await this.trainingLevels.replaceAll(body.levels, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
   }
 
   /** Replace DB contents with built-in default levels (110 rows, same as cold-start seed). */
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('levels/reseed')
   async reseedTrainingLevels(
-    @Headers('authorization') authorization: string | undefined,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     return await this.trainingLevels.reseedFromSeedFile({
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Get('logs')
   async listLogs(
-    @Headers('authorization') authorization: string | undefined,
-    @Req() req: any,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('action') action?: string,
     @Query('entity') entity?: string,
     @Query('performedByHandle') performedByHandle?: string,
   ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.admin.listLogs(
       limit ? Number.parseInt(limit) : undefined,
       offset ? Number.parseInt(offset) : undefined,
@@ -147,33 +141,32 @@ export class AdminController {
     );
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Get('contact')
   async listContactMessages(
-    @Headers('authorization') authorization: string | undefined,
-    @Req() req: any,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '50',
   ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
-    return { messages: await this.contact.listMessages() };
+    return this.contact.listMessages(
+      Number.parseInt(page, 10) || 1,
+      Number.parseInt(limit, 10) || 50,
+    );
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('contact/:id/read')
   async markContactRead(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
-    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return this.contact.markAsRead(id);
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('contact/:id/reply')
   async replyContactMessage(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body('message') message: string,
-    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return this.contact.sendReply(id, message);
   }
 }

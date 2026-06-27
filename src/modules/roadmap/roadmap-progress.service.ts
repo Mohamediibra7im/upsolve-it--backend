@@ -358,6 +358,62 @@ export class RoadmapProgressService {
     return Math.min(100, Math.round(totalContribution));
   }
 
+  private async checkLearningGate(
+    userId: string,
+    topicId: Types.ObjectId,
+    language: 'Arabic' | 'English' | undefined,
+    requiredPct: number,
+  ): Promise<void> {
+    const pct = await this.calculateLearningProgress(userId, topicId, language);
+    if (pct < requiredPct) {
+      throw new BadRequestException(
+        `Problems are locked. Reach ${requiredPct}% learning progress first. Currently: ${pct}%`,
+      );
+    }
+  }
+
+  private async awardXpAndMarkFlag(
+    userId: string,
+    amount: number,
+    reason: string,
+    sourceType: string,
+    sourceId: Types.ObjectId,
+    filter: Record<string, unknown>,
+    progressModel: Model<any>,
+  ): Promise<number> {
+    const earned = await this.awardXp(userId, amount, reason, sourceType, sourceId);
+    if (earned > 0) {
+      await progressModel.updateOne(filter, { $set: { xpAwarded: true } });
+    }
+    return earned;
+  }
+
+  private async revokeXpIfAwarded(
+    userId: Types.ObjectId,
+    progressModel: Model<any>,
+    findFilter: Record<string, unknown>,
+    updateFields: Record<string, unknown>,
+    sourceType: string,
+    sourceId: Types.ObjectId,
+    xpAmount: number,
+  ): Promise<boolean> {
+    const claimed = await progressModel.findOneAndUpdate(
+      { ...findFilter, xpAwarded: true },
+      { $set: { ...updateFields, xpAwarded: false } },
+      { returnDocument: 'before' },
+    );
+    if (claimed) {
+      await this.xpTransactionModel.deleteOne({
+        userId,
+        sourceType,
+        sourceId,
+      });
+      await this.revokeXp(userId, xpAmount);
+      return true;
+    }
+    return false;
+  }
+
   private async updateTopicAndLevelProgress(
     userId: string,
     topicId: Types.ObjectId,
@@ -579,37 +635,28 @@ export class RoadmapProgressService {
 
     let xpEarned = 0;
     if (nextCompleted && updated && !updated.xpAwarded) {
-      xpEarned = await this.awardXp(
+      xpEarned = await this.awardXpAndMarkFlag(
         userId,
         resource.xpReward ?? 10,
         `Completed resource ${resource.title}`,
         'resource',
         resId,
-      );
-      // Mark xpAwarded — awardXp returning amount means XP is credited (new or duplicate tx)
-      await this.resourceProgressModel.updateOne(
         { _id: updated._id },
-        { $set: { xpAwarded: true } },
+        this.resourceProgressModel,
       );
     } else if (!isCompleted && !nextCompleted) {
-      // Manual resource uncompleted — atomically claim the revocation to prevent double-revoke
-      const claimed = await this.resourceProgressModel.findOneAndUpdate(
-        { userId: userOid, resourceId: resId, xpAwarded: true },
-        { $set: { isCompleted: false, completedAt: null, xpAwarded: false } },
-        { returnDocument: 'before' },
+      const revoked = await this.revokeXpIfAwarded(
+        userOid,
+        this.resourceProgressModel,
+        { userId: userOid, resourceId: resId },
+        { isCompleted: false, completedAt: null },
+        'resource',
+        resId,
+        resource.xpReward ?? 10,
       );
-
-      if (claimed) {
-        const revokeAmount = resource.xpReward ?? 10;
-        await this.xpTransactionModel.deleteOne({
-          userId: userOid,
-          sourceType: 'resource',
-          sourceId: resId,
-        });
-        await this.revokeXp(userOid, revokeAmount);
-        xpEarned = -revokeAmount;
+      if (revoked) {
+        xpEarned = -(resource.xpReward ?? 10);
       } else {
-        // xpAwarded was already false — just clear completion flags
         await this.resourceProgressModel.updateOne(
           { userId: userOid, resourceId: resId },
           { $set: { isCompleted: false, completedAt: null } },
@@ -643,16 +690,7 @@ export class RoadmapProgressService {
     const topic = await this.topicModel.findById(tId).lean();
     if (!topic) throw new NotFoundException('Topic not found');
 
-    const learningPct = await this.calculateLearningProgress(
-      userId,
-      tId,
-      language,
-    );
-    if (learningPct < topic.requiredLearningPct) {
-      throw new BadRequestException(
-        `Problems are locked. Reach ${topic.requiredLearningPct}% learning progress first. Currently: ${learningPct}%`,
-      );
-    }
+    await this.checkLearningGate(userId, tId, language, topic.requiredLearningPct);
 
     const user = await this.userModel
       .findById(userId)
@@ -743,18 +781,14 @@ export class RoadmapProgressService {
           .lean();
 
         if (!prog?.xpAwarded) {
-          const earned = await this.awardXp(
+          xpEarned += await this.awardXpAndMarkFlag(
             userId,
             p.xpReward ?? 40,
             `Solved ${p.name}`,
             'problem',
             p._id,
-          );
-          xpEarned += earned;
-          // Mark xpAwarded — awardXp returning amount means XP is credited
-          await this.problemProgressModel.updateOne(
             { userId: new Types.ObjectId(userId), problemId: p._id },
-            { $set: { xpAwarded: true } },
+            this.problemProgressModel,
           );
         }
       }
@@ -790,15 +824,8 @@ export class RoadmapProgressService {
     const topic = await this.topicModel.findById(problem.topicId).lean();
     if (!topic) throw new NotFoundException('Topic not found');
 
-    const learningPct = await this.calculateLearningProgress(
-      userId,
-      topic._id,
-      language,
-    );
-    if (solved && learningPct < topic.requiredLearningPct) {
-      throw new BadRequestException(
-        `Problems are locked. Reach ${topic.requiredLearningPct}% learning progress first.`,
-      );
+    if (solved) {
+      await this.checkLearningGate(userId, topic._id, language, topic.requiredLearningPct);
     }
 
     const userOid = new Types.ObjectId(userId);
@@ -821,42 +848,29 @@ export class RoadmapProgressService {
         .lean();
 
       if (!prog?.xpAwarded) {
-        const earned = await this.awardXp(
+        xpDelta = await this.awardXpAndMarkFlag(
           userId,
           problem.xpReward ?? 40,
           `Solved ${problem.name}`,
           'problem',
           probOid,
-        );
-        xpDelta = earned;
-
-        // Mark xpAwarded regardless of whether awardXp created a new transaction
-        // or found a duplicate — in both cases XP is correctly credited.
-        await this.problemProgressModel.updateOne(
           { userId: userOid, problemId: probOid },
-          { $set: { xpAwarded: true } },
+          this.problemProgressModel,
         );
       }
     } else {
-      // Atomically claim the XP revocation by flipping xpAwarded false→null guard.
-      // findOneAndUpdate only matches if xpAwarded is true, preventing double-revoke.
-      const claimed = await this.problemProgressModel.findOneAndUpdate(
-        { userId: userOid, problemId: probOid, xpAwarded: true },
-        { $set: { isSolved: false, solvedAt: null, xpAwarded: false } },
-        { returnDocument: 'before' },
+      const revoked = await this.revokeXpIfAwarded(
+        userOid,
+        this.problemProgressModel,
+        { userId: userOid, problemId: probOid },
+        { isSolved: false, solvedAt: null },
+        'problem',
+        probOid,
+        problem.xpReward ?? 40,
       );
-
-      if (claimed) {
-        const revokeAmount = problem.xpReward ?? 40;
-        await this.xpTransactionModel.deleteOne({
-          userId: userOid,
-          sourceType: 'problem',
-          sourceId: probOid,
-        });
-        await this.revokeXp(userOid, revokeAmount);
-        xpDelta = -revokeAmount;
+      if (revoked) {
+        xpDelta = -(problem.xpReward ?? 40);
       } else {
-        // xpAwarded was already false — just flip isSolved without touching XP
         await this.problemProgressModel.updateOne(
           { userId: userOid, problemId: probOid },
           { $set: { isSolved: false, solvedAt: null } },
@@ -1198,12 +1212,7 @@ export class RoadmapProgressService {
     const topic = await this.topicModel.findById(tId).lean();
     if (!topic) throw new NotFoundException('Topic not found');
 
-    const currentPct = await this.calculateLearningProgress(userId, tId, language);
-    if (currentPct < topic.requiredLearningPct) {
-      throw new BadRequestException(
-        `Must reach ${topic.requiredLearningPct}% learning progress first. Currently at ${currentPct}%.`,
-      );
-    }
+    await this.checkLearningGate(userId, tId, language, topic.requiredLearningPct);
 
     const filter: Record<string, unknown> = { topicId: tId };
     if (language) filter.language = language;
@@ -1242,17 +1251,14 @@ export class RoadmapProgressService {
       );
 
       if (updated && !updated.xpAwarded) {
-        const earned = await this.awardXp(
+        xpEarned += await this.awardXpAndMarkFlag(
           userId,
           resource.xpReward ?? 10,
           `Completed resource ${resource.title}`,
           'resource',
           resource._id,
-        );
-        xpEarned += earned;
-        await this.resourceProgressModel.updateOne(
           { _id: updated._id },
-          { $set: { xpAwarded: true } },
+          this.resourceProgressModel,
         );
       }
     }

@@ -126,9 +126,12 @@ describe('RoadmapProgressService', () => {
     resourceModel.find.mockImplementation(() => mockQuery([
       { _id: resourceId, type: 'Article', weight: 100, language: 'English' },
     ]));
-    resourceProgressModel.find.mockResolvedValue([
+    resourceProgressModel.find.mockImplementation(() => mockQuery([
       { resourceId, isCompleted: true, watchPct: 0 },
-    ]);
+    ]));
+    topicModel.find.mockImplementation(() => mockQuery([
+      { _id: topicId },
+    ]));
     problemModel.find.mockImplementation(() => mockQuery([]));
     problemProgressModel.countDocuments.mockResolvedValue(0);
     topicProgressModel.findOne.mockResolvedValue(null);
@@ -188,9 +191,12 @@ describe('RoadmapProgressService', () => {
     resourceModel.find.mockImplementation(() => mockQuery([
       { _id: resourceId, type: 'Article', weight: 100, language: 'English' },
     ]));
-    resourceProgressModel.find.mockResolvedValue([
+    resourceProgressModel.find.mockImplementation(() => mockQuery([
       { resourceId, isCompleted: true, watchPct: 0 },
-    ]);
+    ]));
+    topicModel.find.mockImplementation(() => mockQuery([
+      { _id: topicId },
+    ]));
     problemModel.find.mockImplementation(() => mockQuery([]));
     problemProgressModel.countDocuments.mockResolvedValue(0);
     topicProgressModel.findOne.mockResolvedValue(null);
@@ -259,17 +265,21 @@ describe('RoadmapProgressService', () => {
 
     // Simulate progress doc already has xpAwarded: false (ready to award)
     problemProgressModel.updateOne.mockResolvedValue(null);
-    problemProgressModel.findOne.mockResolvedValue({
+    problemProgressModel.findOne.mockImplementation(() => mockQuery({
       _id: new Types.ObjectId(),
       isSolved: true,
       xpAwarded: false,
-    });
+    }));
 
     // Transaction create throws duplicate key error
     const dupError = Object.assign(new Error('duplicate key'), { code: 11000 });
     xpTransactionModel.create.mockRejectedValue(dupError);
 
     xpModel.findOneAndUpdate.mockResolvedValue(null);
+    resourceModel.find.mockImplementation(() => mockQuery([]));
+    topicModel.find.mockImplementation(() => mockQuery([
+      { _id: topicId },
+    ]));
     problemModel.find.mockImplementation(() => mockQuery([{ _id: problemId }]));
     problemProgressModel.countDocuments.mockResolvedValue(1);
     topicProgressModel.findOne.mockResolvedValue(null);

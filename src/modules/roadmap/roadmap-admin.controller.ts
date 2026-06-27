@@ -3,13 +3,15 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   Param,
   Patch,
   Post,
-  Req,
+  UseGuards,
 } from '@nestjs/common';
-import { AdminService } from '../admin/admin.service';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { AdminGuard } from '../../common/guards/admin.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User, type UserDocument } from '../auth/schemas/user.schema';
 import { RoadmapAdminService } from './roadmap-admin.service';
 import { RoadmapProgressService } from './roadmap-progress.service';
 import { CreateLevelDto } from './dto/create-level.dto';
@@ -29,107 +31,83 @@ import { BulkAddProblemsDto } from './dto/bulk-add-problems.dto';
 @Controller('admin/roadmap')
 export class RoadmapAdminController {
   constructor(
-    private readonly admin: AdminService,
     private readonly roadmap: RoadmapAdminService,
     private readonly progress: RoadmapProgressService,
   ) {}
 
   // === LEVELS ===
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Get('levels')
-  async listLevels(
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
-  ) {
-    await this.admin.requireAdmin(authorization, req?.cookies?.accessToken);
+  async listLevels() {
     const levels = await this.roadmap.listLevels();
     return { levels };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('levels')
   async createLevel(
-    @Headers('authorization') authorization: string | undefined,
     @Body() body: CreateLevelDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     const level = await this.roadmap.createLevel(body, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { level };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('levels/:id')
   async updateLevel(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: UpdateLevelDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     const level = await this.roadmap.updateLevel(id, body, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { level };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Delete('levels/:id')
   async deleteLevel(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     return await this.roadmap.deleteLevel(id, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
   }
 
   // === GRANT / REVOKE ACCESS ===
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('levels/:id/grant')
   async grantLevelAccess(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: GrantLevelAccessDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     const level = await this.roadmap.grantLevelAccess(id, body.userIds, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { level };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('levels/:id/revoke')
   async revokeLevelAccess(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: GrantLevelAccessDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     const level = await this.roadmap.revokeLevelAccess(id, body.userIds, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { level };
@@ -137,138 +115,106 @@ export class RoadmapAdminController {
 
   // === TOPICS ===
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Get('levels/:id/topics')
-  async listTopics(
-    @Headers('authorization') authorization: string | undefined,
-    @Param('id') id: string,
-    @Req() req: any,
-  ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+  async listTopics(@Param('id') id: string) {
     const topics = await this.roadmap.listTopics(id);
     return { topics };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('levels/:id/topics')
   async createTopic(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: CreateTopicDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     const topic = await this.roadmap.createTopic(id, body, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { topic };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('topics/:id')
   async updateTopic(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: UpdateTopicDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     const topic = await this.roadmap.updateTopic(id, body, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { topic };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('topics/:id/reorder')
   async reorderTopic(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: ReorderDto,
-    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const topic = await this.roadmap.reorderTopicOnly(id, body.orderIndex);
     return { topic };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Delete('topics/:id')
   async deleteTopic(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     return await this.roadmap.deleteTopic(id, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
   }
 
   // === RESOURCES ===
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Get('topics/:id/resources')
-  async listResources(
-    @Headers('authorization') authorization: string | undefined,
-    @Param('id') id: string,
-    @Req() req: any,
-  ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+  async listResources(@Param('id') id: string) {
     const resources = await this.roadmap.listResources(id);
     return { resources };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('topics/:id/resources')
   async addResource(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: CreateResourceDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     const resource = await this.roadmap.addResource(id, body, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { resource };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('resources/:id')
   async updateResource(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: UpdateResourceDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     const resource = await this.roadmap.updateResource(id, body, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { resource };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('resources/:id/reorder')
   async reorderResource(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: ReorderDto,
-    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const resource = await this.roadmap.reorderResourceOnly(
       id,
       body.orderIndex,
@@ -276,140 +222,108 @@ export class RoadmapAdminController {
     return { resource };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Delete('resources/:id')
   async deleteResource(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     return await this.roadmap.deleteResource(id, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
   }
 
   // === PROBLEMS ===
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Get('topics/:id/problems')
-  async listProblems(
-    @Headers('authorization') authorization: string | undefined,
-    @Param('id') id: string,
-    @Req() req: any,
-  ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
+  async listProblems(@Param('id') id: string) {
     const problems = await this.roadmap.listProblems(id);
     return { problems };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('topics/:id/problems')
   async addProblem(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: CreateProblemDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     const problem = await this.roadmap.addProblem(id, body, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { problem };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('topics/:id/problems/bulk')
   async addProblems(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: BulkAddProblemsDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     return await this.roadmap.addProblems(id, body.problems, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('problems/:id')
   async updateProblem(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: UpdateProblemDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     const problem = await this.roadmap.updateProblem(id, body, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
     return { problem };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('problems/:id/reorder')
   async reorderProblem(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: ReorderDto,
-    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     const problem = await this.roadmap.reorderProblemOnly(id, body.orderIndex);
     return { problem };
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Delete('problems/:id')
   async deleteProblem(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     return await this.roadmap.deleteProblem(id, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Delete('problems')
   async deleteProblems(
-    @Headers('authorization') authorization: string | undefined,
     @Body() body: DeleteProblemsDto,
-    @Req() req: any,
+    @CurrentUser() current: UserDocument,
   ) {
-    const current = await this.admin.requireAdmin(
-      authorization,
-      req.cookies?.accessToken,
-    );
     return await this.roadmap.deleteProblems(body.problemIds, {
-      adminId: String(current._id),
+      adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
     });
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('topics/:id/import')
   async importProblems(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Body() body: ImportProblemsDto,
-    @Req() req: any,
   ) {
-    await this.admin.requireAdmin(authorization, req.cookies?.accessToken);
     return await this.progress.importProblems(id, body);
   }
 }

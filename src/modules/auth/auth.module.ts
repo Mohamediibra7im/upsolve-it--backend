@@ -29,7 +29,11 @@ import {
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') ?? 'dev-secret',
+        secret: (() => {
+          const s = config.get<string>('JWT_SECRET');
+          if (!s) throw new Error('JWT_SECRET must be set in environment');
+          return s;
+        })(),
         signOptions: { expiresIn: '15m' },
       }),
     }),

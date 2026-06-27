@@ -2,13 +2,15 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Post,
   Query,
-  Req,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User, type UserDocument } from '../auth/schemas/user.schema';
 import { RoadmapPublicService } from './roadmap-public.service';
 import { RoadmapProgressService } from './roadmap-progress.service';
 import { AdminService } from '../admin/admin.service';
@@ -22,157 +24,112 @@ export class RoadmapPublicController {
   ) {}
 
   @Get('levels')
-  async listLevels(
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
-  ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req?.cookies?.accessToken,
-    );
+  @UseGuards(OptionalAuthGuard)
+  async listLevels(@CurrentUser() user: UserDocument | null) {
+    const userId = user ? String(user._id) : null;
     const levels = await this.roadmap.listLevels(userId);
     return { levels };
   }
 
   @Get('leaderboard')
+  @UseGuards(OptionalAuthGuard)
   async getLeaderboard(
+    @CurrentUser() user: UserDocument | null,
     @Query('level') level?: string,
     @Query('period') period?: string,
     @Query('limit') limit?: string,
     @Query('page') page?: string,
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
   ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req?.cookies?.accessToken,
-    ).catch(() => undefined);
-
+    const userId = user ? user._id.toString() : undefined;
     return await this.progress.getLeaderboard(
       { level, period, limit, page },
-      userId ?? undefined,
+      userId,
     );
   }
 
   @Get('users/:userId/stats')
+  @UseGuards(AuthGuard)
   async getUserStats(
-    @Headers('authorization') authorization: string | undefined,
     @Param('userId') targetUserId: string,
-    @Req() req: any,
+    @CurrentUser() _user: UserDocument,
   ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req?.cookies?.accessToken,
-    );
-    if (!userId) throw new UnauthorizedException('Unauthorized');
     return await this.admin.userStats(targetUserId);
   }
 
   @Get('user/summary')
-  async getUserSummary(
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
-  ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req?.cookies?.accessToken,
-    );
-    if (!userId) throw new UnauthorizedException('Unauthorized');
-    return await this.progress.getUserSummary(userId);
+  @UseGuards(AuthGuard)
+  async getUserSummary(@CurrentUser() user: UserDocument) {
+    return await this.progress.getUserSummary(user._id.toString());
   }
 
   @Get('user/activity')
-  async getUserActivity(
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
-  ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req?.cookies?.accessToken,
-    );
-    if (!userId) throw new UnauthorizedException('Unauthorized');
-    return await this.progress.getUserActivity(userId);
+  @UseGuards(AuthGuard)
+  async getUserActivity(@CurrentUser() user: UserDocument) {
+    return await this.progress.getUserActivity(user._id.toString());
   }
 
   @Get('levels/:id')
+  @UseGuards(OptionalAuthGuard)
   async getLevel(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
-    @Req() req: any,
+    @CurrentUser() user: UserDocument | null,
   ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req.cookies?.accessToken,
-    );
+    const userId = user ? String(user._id) : null;
     return await this.roadmap.getLevelDetail(id, userId);
   }
 
   @Get('levels/:id/topics/:topicId')
+  @UseGuards(OptionalAuthGuard)
   async getTopic(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
     @Param('topicId') topicId: string,
     @Query('language') language: string | undefined,
-    @Req() req: any,
+    @CurrentUser() user: UserDocument | null,
   ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req.cookies?.accessToken,
-    );
+    const userId = user ? String(user._id) : null;
     const lang =
       language === 'Arabic' || language === 'English' ? language : undefined;
     return await this.roadmap.getTopicDetail(id, topicId, userId, lang);
   }
 
   @Post('resources/:resourceId/progress')
+  @UseGuards(AuthGuard)
   async updateResourceProgress(
-    @Headers('authorization') authorization: string | undefined,
     @Param('resourceId') resourceId: string,
     @Body()
     body: { watchPct?: number; positionSec?: number; completed?: boolean },
-    @Req() req: any,
+    @CurrentUser() user: UserDocument,
   ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req.cookies?.accessToken,
+    return await this.progress.recordResourceProgress(
+      user._id.toString(),
+      resourceId,
+      body,
     );
-    if (!userId) throw new UnauthorizedException('Unauthorized');
-    return await this.progress.recordResourceProgress(userId, resourceId, body);
   }
 
   @Post('topics/:topicId/sync')
+  @UseGuards(AuthGuard)
   async syncTopicProblems(
-    @Headers('authorization') authorization: string | undefined,
     @Param('topicId') topicId: string,
     @Body() body: { language?: 'Arabic' | 'English' },
-    @Req() req: any,
+    @CurrentUser() user: UserDocument,
   ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!userId) throw new UnauthorizedException('Unauthorized');
     return await this.progress.syncTopicProblems(
-      userId,
+      user._id.toString(),
       topicId,
       body.language,
     );
   }
 
   @Post('problems/:problemId/toggle')
+  @UseGuards(AuthGuard)
   async toggleProblem(
-    @Headers('authorization') authorization: string | undefined,
     @Param('problemId') problemId: string,
     @Body() body: { solved: boolean; language?: 'Arabic' | 'English' },
-    @Req() req: any,
+    @CurrentUser() user: UserDocument,
   ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!userId) throw new UnauthorizedException('Unauthorized');
     return await this.progress.toggleProblemSolved(
-      userId,
+      user._id.toString(),
       problemId,
       body.solved,
       body.language,
@@ -180,34 +137,28 @@ export class RoadmapPublicController {
   }
 
   @Post('topics/:topicId/complete-learning')
+  @UseGuards(AuthGuard)
   async completeLearning(
-    @Headers('authorization') authorization: string | undefined,
     @Param('topicId') topicId: string,
     @Query('language') language: 'Arabic' | 'English' | undefined,
-    @Req() req: any,
+    @CurrentUser() user: UserDocument,
   ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req.cookies?.accessToken,
+    return await this.progress.completeLearning(
+      user._id.toString(),
+      topicId,
+      language,
     );
-    if (!userId) throw new UnauthorizedException('Unauthorized');
-    return await this.progress.completeLearning(userId, topicId, language);
   }
 
   @Post('topics/:topicId/reset-learning')
+  @UseGuards(AuthGuard)
   async resetTopicLearning(
-    @Headers('authorization') authorization: string | undefined,
     @Param('topicId') topicId: string,
     @Query('language') language: 'Arabic' | 'English' | undefined,
-    @Req() req: any,
+    @CurrentUser() user: UserDocument,
   ) {
-    const userId = await this.roadmap.resolveUserId(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!userId) throw new UnauthorizedException('Unauthorized');
     return await this.progress.resetTopicLearningProgress(
-      userId,
+      user._id.toString(),
       topicId,
       language,
     );

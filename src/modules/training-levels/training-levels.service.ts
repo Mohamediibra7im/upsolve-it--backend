@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -18,6 +18,8 @@ type ClientLevelRow = {
 
 @Injectable()
 export class TrainingLevelsService implements OnModuleInit {
+  private readonly logger = new Logger(TrainingLevelsService.name);
+
   constructor(
     @InjectModel(TrainingLevel.name)
     private readonly trainingLevelModel: Model<TrainingLevelDocument>,
@@ -34,9 +36,8 @@ export class TrainingLevelsService implements OnModuleInit {
 
     const ok = getDefaultTrainingLevelDocs();
     await this.trainingLevelModel.insertMany(ok);
-    console.info(
-      '[training-levels] Seeded %d default training levels.',
-      ok.length,
+    this.logger.log(
+      `Seeded ${ok.length} default training levels.`,
     );
   }
 

@@ -3,13 +3,14 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   Post,
   Put,
   Body,
-  Req,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User, type UserDocument } from '../auth/schemas/user.schema';
 import { UpsolveService } from './upsolve.service';
 import { UserStatsService } from '../user-stats/user-stats.service';
 
@@ -20,17 +21,10 @@ export class UpsolveController {
     private readonly userStats: UserStatsService,
   ) {}
 
+  @UseGuards(AuthGuard)
   @Get()
-  async list(
-    @Headers('authorization') authorization: string | undefined,
-    @Req() req: any,
-  ) {
-    const user = await this.upsolve.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.upsolve.list(String(user._id));
+  async list(@CurrentUser() user: UserDocument) {
+    return await this.upsolve.list(user._id.toString());
   }
 
   /**
@@ -38,32 +32,20 @@ export class UpsolveController {
    * from the upsolve list. The frontend uses this to prevent the
    * auto-sync logic from re-inserting deleted problems.
    */
+  @UseGuards(AuthGuard)
   @Get('dismissed')
-  async listDismissed(
-    @Headers('authorization') authorization: string | undefined,
-    @Req() req: any,
-  ) {
-    const user = await this.upsolve.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.upsolve.listDismissed(String(user._id));
+  async listDismissed(@CurrentUser() user: UserDocument) {
+    return await this.upsolve.listDismissed(user._id.toString());
   }
 
+  @UseGuards(AuthGuard)
   @Post()
   async add(
-    @Headers('authorization') authorization: string | undefined,
+    @CurrentUser() user: UserDocument,
     @Body() problems: any[],
-    @Req() req: any,
   ) {
-    const user = await this.upsolve.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
     try {
-      await this.upsolve.insertMany(String(user._id), problems);
+      await this.upsolve.insertMany(user._id.toString(), problems);
       return { message: 'Upsolved problems added' };
     } catch (err: unknown) {
       if (
@@ -80,42 +62,32 @@ export class UpsolveController {
     }
   }
 
+  @UseGuards(AuthGuard)
   @Put()
   async update(
-    @Headers('authorization') authorization: string | undefined,
+    @CurrentUser() user: UserDocument,
     @Body() problems: any[],
-    @Req() req: any,
   ) {
-    const user = await this.upsolve.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
     if (!Array.isArray(problems) || problems.length === 0) {
       throw new BadRequestException('Invalid request body');
     }
-    await this.upsolve.bulkUpdateSolvedTime(String(user._id), problems);
+    await this.upsolve.bulkUpdateSolvedTime(user._id.toString(), problems);
     if (problems.some((p: { solvedTime?: number | null }) => p.solvedTime)) {
-      await this.userStats.recordUpsolveSolved(String(user._id));
+      await this.userStats.recordUpsolveSolved(user._id.toString());
     }
     return { message: 'Upsolved problems updated' };
   }
 
+  @UseGuards(AuthGuard)
   @Delete()
   async remove(
-    @Headers('authorization') authorization: string | undefined,
+    @CurrentUser() user: UserDocument,
     @Body() body: { contestId?: number; index?: string },
-    @Req() req: any,
   ) {
-    const user = await this.upsolve.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
     if (!body?.contestId || !body?.index) {
       throw new BadRequestException('Missing contestId or index');
     }
-    await this.upsolve.deleteOne(String(user._id), body.contestId, body.index);
+    await this.upsolve.deleteOne(user._id.toString(), body.contestId, body.index);
     return { message: 'Problem deleted from upsolve list' };
   }
 }

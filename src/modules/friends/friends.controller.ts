@@ -3,13 +3,13 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   Param,
   Post,
-  Req,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { TrainingsService } from '../trainings/trainings.service';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User, type UserDocument } from '../auth/schemas/user.schema';
 import { FriendsService } from './friends.service';
 import { AddFriendDto } from './dto/add-friend.dto';
 
@@ -21,122 +21,77 @@ import { AddFriendDto } from './dto/add-friend.dto';
 export class FriendsController {
   constructor(
     private readonly friends: FriendsService,
-    private readonly trainings: TrainingsService,
   ) {}
 
+  @UseGuards(AuthGuard)
   @Get('requests')
-  async listRequests(
-    @Headers('authorization') authorization: string | undefined,
-    @Req() req: any,
-  ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.friends.listRequests(String(user._id));
+  async listRequests(@CurrentUser() user: UserDocument) {
+    return await this.friends.listRequests(user._id.toString());
   }
 
+  @UseGuards(AuthGuard)
   @Post('requests')
   async sendRequest(
-    @Headers('authorization') authorization: string | undefined,
+    @CurrentUser() user: UserDocument,
     @Body() body: AddFriendDto,
-    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.sendRequest(
-      String(user._id),
+      user._id.toString(),
       body.codeforcesHandle,
     );
   }
 
+  @UseGuards(AuthGuard)
   @Post('requests/:requestId/accept')
   async acceptRequest(
-    @Headers('authorization') authorization: string | undefined,
+    @CurrentUser() user: UserDocument,
     @Param('requestId') requestId: string,
-    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.friends.acceptRequest(String(user._id), requestId);
+    return await this.friends.acceptRequest(user._id.toString(), requestId);
   }
 
+  @UseGuards(AuthGuard)
   @Post('requests/:requestId/decline')
   async declineRequest(
-    @Headers('authorization') authorization: string | undefined,
+    @CurrentUser() user: UserDocument,
     @Param('requestId') requestId: string,
-    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.friends.declineRequest(String(user._id), requestId);
+    return await this.friends.declineRequest(user._id.toString(), requestId);
   }
 
+  @UseGuards(AuthGuard)
   @Delete('requests/:requestId')
   async cancelRequest(
-    @Headers('authorization') authorization: string | undefined,
+    @CurrentUser() user: UserDocument,
     @Param('requestId') requestId: string,
-    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
     return await this.friends.cancelOutgoingRequest(
-      String(user._id),
+      user._id.toString(),
       requestId,
     );
   }
 
+  @UseGuards(AuthGuard)
   @Get()
-  async list(
-    @Headers('authorization') authorization: string | undefined,
-    @Req() req: any,
-  ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.friends.listFriends(String(user._id));
+  async list(@CurrentUser() user: UserDocument) {
+    return await this.friends.listFriends(user._id.toString());
   }
 
+  @UseGuards(AuthGuard)
   @Get(':userId/stats')
   async friendStats(
-    @Headers('authorization') authorization: string | undefined,
+    @CurrentUser() user: UserDocument,
     @Param('userId') friendUserId: string,
-    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.friends.getFriendStats(String(user._id), friendUserId);
+    return await this.friends.getFriendStats(user._id.toString(), friendUserId);
   }
 
+  @UseGuards(AuthGuard)
   @Delete(':userId')
   async remove(
-    @Headers('authorization') authorization: string | undefined,
+    @CurrentUser() user: UserDocument,
     @Param('userId') friendUserId: string,
-    @Req() req: any,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.friends.removeFriend(String(user._id), friendUserId);
+    return await this.friends.removeFriend(user._id.toString(), friendUserId);
   }
 }

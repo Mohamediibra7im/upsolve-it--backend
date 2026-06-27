@@ -73,7 +73,7 @@ export class WhatsNewService {
 
   /** Return all entries (admin view — includes drafts). */
   async findAll() {
-    return this.entryModel.find().sort({ createdAt: -1 }).exec();
+    return this.entryModel.find().sort({ createdAt: -1 }).limit(200).exec();
   }
 
   /** Return only published entries (user-facing). */
@@ -81,6 +81,7 @@ export class WhatsNewService {
     return this.entryModel
       .find({ isPublished: true })
       .sort({ publishedAt: -1 })
+      .limit(200)
       .exec();
   }
 }

@@ -64,13 +64,14 @@ export class SuggestionsService {
   }
 
   async findAll() {
-    return this.model.find().sort({ order: 1, createdAt: -1 }).exec();
+    return this.model.find().sort({ order: 1, createdAt: -1 }).limit(200).exec();
   }
 
   async findActive() {
     return this.model
       .find({ isActive: true })
       .sort({ order: 1, createdAt: -1 })
+      .limit(200)
       .exec();
   }
 }

@@ -33,6 +33,7 @@ import {
   UserTopicProgress,
   type UserTopicProgressDocument,
 } from '../roadmap/schemas/user-topic-progress.schema';
+import { getRankFromRating } from '../../common/utils/rating';
 
 @Injectable()
 export class AdminService {
@@ -66,28 +67,10 @@ export class AdminService {
   }
 
   async stats() {
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const trendStart = new Date(now);
-    trendStart.setUTCHours(0, 0, 0, 0);
-    trendStart.setUTCDate(trendStart.getUTCDate() - 6);
-    const trendStartMs = trendStart.getTime();
+    const { now, thirtyDaysAgo, trendStart, trendStartMs } =
+      this.getDateBoundaries();
 
-    const solvedProblemsExpression = {
-      $size: {
-        $filter: {
-          input: { $ifNull: ['$problems', []] },
-          as: 'problem',
-          cond: {
-            $or: [
-              { $eq: ['$$problem.isSolved', true] },
-              { $ne: [{ $ifNull: ['$$problem.solvedTime', null] }, null] },
-              { $ne: [{ $ifNull: ['$$problem.solvedAt', null] }, null] },
-            ],
-          },
-        },
-      },
-    };
+    const solvedProblemsExpression = this.getSolvedExpression();
 
     const [
       userStats,
@@ -305,65 +288,16 @@ export class AdminService {
     const totalUpsolvedProblems = upsolveTotals.totalUpsolvedProblems ?? 0;
     const completedUpsolves = upsolveTotals.completedUpsolves ?? 0;
 
-    const ratingBandOrder = [
-      '<1200',
-      '1200-1399',
-      '1400-1599',
-      '1600-1899',
-      '1900-2099',
-      '2100-2399',
-      '2400+',
-    ];
-    const ratingBandMap = new Map(
-      ratingBandsRaw.map((band) => [band._id, band.count]),
-    );
+    const ratingBands = this.buildRatingBands(ratingBandsRaw);
 
-    const modeOrder = ['ladder', 'weakness', 'speed', 'contest', 'endurance'];
-    const modeMap = new Map(
-      trainingModesRaw.map((mode) => [
-        mode._id ?? 'ladder',
-        { sessions: mode.sessions ?? 0, solved: mode.solved ?? 0 },
-      ]),
-    );
+    const trainingModes = this.buildTrainingModes(trainingModesRaw);
 
-    const trendMap = new Map<
-      string,
-      {
-        date: string;
-        label: string;
-        users: number;
-        sessions: number;
-        upsolves: number;
-      }
-    >();
-    for (let index = 0; index < 7; index += 1) {
-      const date = new Date(trendStart);
-      date.setUTCDate(trendStart.getUTCDate() + index);
-      const dateKey = date.toISOString().slice(0, 10);
-      trendMap.set(dateKey, {
-        date: dateKey,
-        label: date.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          timeZone: 'UTC',
-        }),
-        users: 0,
-        sessions: 0,
-        upsolves: 0,
-      });
-    }
-    for (const row of userTrendRaw) {
-      const bucket = trendMap.get(row._id);
-      if (bucket) bucket.users = row.users ?? 0;
-    }
-    for (const row of trainingTrendRaw) {
-      const bucket = trendMap.get(row._id);
-      if (bucket) bucket.sessions = row.sessions ?? 0;
-    }
-    for (const row of upsolveTrendRaw) {
-      const bucket = trendMap.get(row._id);
-      if (bucket) bucket.upsolves = row.upsolves ?? 0;
-    }
+    const activityTrend = this.buildActivityTrend(
+      trendStart,
+      userTrendRaw,
+      trainingTrendRaw,
+      upsolveTrendRaw,
+    );
 
     const activeUserIds = new Set([
       ...activeTrainingUsers.map((id) => String(id)),
@@ -406,29 +340,141 @@ export class AdminService {
       totalXpEarned: roadmapXpTotals.totalXpEarned ?? 0,
       totalLevelsCompleted: roadmapLevelTotals.totalLevelsCompleted ?? 0,
       totalTopicsCompleted: roadmapTopicTotals.totalTopicsCompleted ?? 0,
-      ratingBands: ratingBandOrder.map((label) => ({
-        label,
-        count: ratingBandMap.get(label) ?? 0,
-      })),
-      trainingModes: modeOrder.map((mode) => {
-        const modeStats = modeMap.get(mode) ?? { sessions: 0, solved: 0 };
-        return {
-          mode,
-          label: mode.charAt(0).toUpperCase() + mode.slice(1),
-          sessions: modeStats.sessions,
-          solved: modeStats.solved,
-        };
-      }),
-      activityTrend: Array.from(trendMap.values()),
+      ratingBands,
+      trainingModes,
+      activityTrend,
     };
   }
 
-  async listUsers() {
-    const users = await this.userModel
-      .find({})
-      .select('codeforcesHandle role rating rank avatar createdAt')
-      .sort({ createdAt: -1 });
-    return { users };
+  private getDateBoundaries() {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const trendStart = new Date(now);
+    trendStart.setUTCHours(0, 0, 0, 0);
+    trendStart.setUTCDate(trendStart.getUTCDate() - 6);
+    const trendStartMs = trendStart.getTime();
+    return { now, thirtyDaysAgo, trendStart, trendStartMs };
+  }
+
+  private getSolvedExpression() {
+    return {
+      $size: {
+        $filter: {
+          input: { $ifNull: ['$problems', []] },
+          as: 'problem',
+          cond: {
+            $or: [
+              { $eq: ['$$problem.isSolved', true] },
+              { $ne: [{ $ifNull: ['$$problem.solvedTime', null] }, null] },
+              { $ne: [{ $ifNull: ['$$problem.solvedAt', null] }, null] },
+            ],
+          },
+        },
+      },
+    };
+  }
+
+  private buildRatingBands(
+    ratingBandsRaw: { _id: string; count: number }[],
+  ) {
+    const ratingBandOrder = [
+      '<1200',
+      '1200-1399',
+      '1400-1599',
+      '1600-1899',
+      '1900-2099',
+      '2100-2399',
+      '2400+',
+    ];
+    const ratingBandMap = new Map(
+      ratingBandsRaw.map((band) => [band._id, band.count]),
+    );
+    return ratingBandOrder.map((label) => ({
+      label,
+      count: ratingBandMap.get(label) ?? 0,
+    }));
+  }
+
+  private buildTrainingModes(
+    trainingModesRaw: { _id: string; sessions: number; solved: number }[],
+  ) {
+    const modeOrder = ['ladder', 'weakness', 'speed', 'contest', 'endurance'];
+    const modeMap = new Map(
+      trainingModesRaw.map((mode) => [
+        mode._id ?? 'ladder',
+        { sessions: mode.sessions ?? 0, solved: mode.solved ?? 0 },
+      ]),
+    );
+    return modeOrder.map((mode) => {
+      const modeStats = modeMap.get(mode) ?? { sessions: 0, solved: 0 };
+      return {
+        mode,
+        label: mode.charAt(0).toUpperCase() + mode.slice(1),
+        sessions: modeStats.sessions,
+        solved: modeStats.solved,
+      };
+    });
+  }
+
+  private buildActivityTrend(
+    trendStart: Date,
+    userTrend: { _id: string; users: number }[],
+    trainingTrend: { _id: string; sessions: number }[],
+    upsolveTrend: { _id: string; upsolves: number }[],
+  ) {
+    const trendMap = new Map<
+      string,
+      {
+        date: string;
+        label: string;
+        users: number;
+        sessions: number;
+        upsolves: number;
+      }
+    >();
+    for (let index = 0; index < 7; index += 1) {
+      const date = new Date(trendStart);
+      date.setUTCDate(trendStart.getUTCDate() + index);
+      const dateKey = date.toISOString().slice(0, 10);
+      trendMap.set(dateKey, {
+        date: dateKey,
+        label: date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        }),
+        users: 0,
+        sessions: 0,
+        upsolves: 0,
+      });
+    }
+    for (const row of userTrend) {
+      const bucket = trendMap.get(row._id);
+      if (bucket) bucket.users = row.users ?? 0;
+    }
+    for (const row of trainingTrend) {
+      const bucket = trendMap.get(row._id);
+      if (bucket) bucket.sessions = row.sessions ?? 0;
+    }
+    for (const row of upsolveTrend) {
+      const bucket = trendMap.get(row._id);
+      if (bucket) bucket.upsolves = row.upsolves ?? 0;
+    }
+    return Array.from(trendMap.values());
+  }
+
+  async listUsers(page = 1, limit = 50) {
+    const skip = (page - 1) * limit;
+    const [users, total] = await Promise.all([
+      this.userModel
+        .find({})
+        .select('codeforcesHandle role rating rank avatar createdAt')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      this.userModel.countDocuments({}),
+    ]);
+    return { users, total, page, limit };
   }
 
   async updateUserRole(
@@ -640,11 +686,11 @@ export class AdminService {
     const currentRating = Number(cfUser.rating ?? 0);
     const currentRank =
       cfUser.rank ??
-      (currentRating === 0 ? 'Unrated' : getRankFromRating(currentRating));
+      getRankFromRating(currentRating);
     const maxRating = Number(cfUser.maxRating ?? 0);
     const maxRank =
       cfUser.maxRank ??
-      (maxRating === 0 ? 'Unrated' : getRankFromRating(maxRating));
+      getRankFromRating(maxRating);
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(
@@ -737,11 +783,11 @@ export class AdminService {
       const currentRating: number = Number(cfUser.rating) || 0;
       const currentRank =
         cfUser.rank ??
-        (currentRating === 0 ? 'Unrated' : getRankFromRating(currentRating));
+        getRankFromRating(currentRating);
       const maxRating: number = Number(cfUser.maxRating) || 0;
       const maxRank =
         cfUser.maxRank ??
-        (maxRating === 0 ? 'Unrated' : getRankFromRating(maxRating));
+        getRankFromRating(maxRating);
 
       await this.userModel.findByIdAndUpdate(user._id, {
         rating: currentRating,
@@ -772,18 +818,37 @@ export class AdminService {
 
     return { message: `Synced ${synced} user(s)`, synced, failed };
   }
+
+  async lockUser(adminId: string, targetUserId: string) {
+    const target = await this.userModel.findById(targetUserId);
+    if (!target) throw new NotFoundException('User not found');
+
+    await this.userModel.findByIdAndUpdate(targetUserId, { locked: true });
+    await this.auditLogs.logAction(
+      'LOCK_USER',
+      'User',
+      adminId,
+      'admin',
+      { targetUserId, targetHandle: target.codeforcesHandle },
+      targetUserId,
+    );
+    return { message: 'User locked' };
+  }
+
+  async unlockUser(adminId: string, targetUserId: string) {
+    const target = await this.userModel.findById(targetUserId);
+    if (!target) throw new NotFoundException('User not found');
+
+    await this.userModel.findByIdAndUpdate(targetUserId, { locked: false });
+    await this.auditLogs.logAction(
+      'UNLOCK_USER',
+      'User',
+      adminId,
+      'admin',
+      { targetUserId, targetHandle: target.codeforcesHandle },
+      targetUserId,
+    );
+    return { message: 'User unlocked' };
+  }
 }
 
-function getRankFromRating(rating: number): string {
-  if (rating === 0) return 'Unrated';
-  if (rating < 1200) return 'Newbie';
-  if (rating < 1400) return 'Pupil';
-  if (rating < 1600) return 'Specialist';
-  if (rating < 1900) return 'Expert';
-  if (rating < 2100) return 'Candidate Master';
-  if (rating < 2300) return 'Master';
-  if (rating < 2400) return 'International Master';
-  if (rating < 2600) return 'Grandmaster';
-  if (rating < 3000) return 'International Grandmaster';
-  return 'Legendary Grandmaster';
-}

@@ -204,10 +204,12 @@ export class FriendsService {
       this.friendRequestModel
         .find({ toUser: uid, status: 'pending' })
         .sort({ createdAt: -1 })
+        .limit(200)
         .lean(),
       this.friendRequestModel
         .find({ fromUser: uid, status: 'pending' })
         .sort({ createdAt: -1 })
+        .limit(200)
         .lean(),
     ]);
 
@@ -369,6 +371,7 @@ export class FriendsService {
       .find({
         $or: [{ userLower: uid }, { userHigher: uid }],
       })
+      .limit(500)
       .lean();
 
     const otherIds = rows.map((r) => {

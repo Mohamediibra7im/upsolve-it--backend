@@ -2,61 +2,43 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   Post,
   Body,
   Param,
-  Req,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User, type UserDocument } from '../auth/schemas/user.schema';
 import { TrainingsService } from './trainings.service';
 
+@UseGuards(AuthGuard)
 @Controller('trainings')
 export class TrainingsController {
   constructor(private readonly trainings: TrainingsService) {}
 
   @Post()
   async create(
-    @Headers('authorization') authorization: string | undefined,
     @Body() body: any,
-    @Req() req: any,
+    @CurrentUser() user: UserDocument,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
     const training = await this.trainings.createTraining(
-      String(user._id),
+      user._id.toString(),
       body,
     );
     return { message: 'Training saved successfully', training };
   }
 
   @Get()
-  async list(
-    @Headers('authorization') authorization: string | undefined,
-    @Req() req: any,
-  ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.trainings.listTrainings(String(user._id));
+  async list(@CurrentUser() user: UserDocument) {
+    return await this.trainings.listTrainings(user._id.toString());
   }
 
   @Delete(':id')
   async remove(
-    @Headers('authorization') authorization: string | undefined,
     @Param('id') id: string,
-    @Req() req: any,
+    @CurrentUser() user: UserDocument,
   ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.trainings.deleteTraining(String(user._id), id);
+    return await this.trainings.deleteTraining(user._id.toString(), id);
   }
 }

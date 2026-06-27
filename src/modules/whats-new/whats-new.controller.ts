@@ -4,24 +4,23 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   Param,
   Patch,
   Post,
-  Req,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { AdminGuard } from '../../common/guards/admin.guard';
 import {
   WhatsNewService,
   type CreateWhatsNewDto,
   type UpdateWhatsNewDto,
 } from './whats-new.service';
-import { AdminService } from '../admin/admin.service';
 
 @Controller('whats-new')
 export class WhatsNewController {
   constructor(
     private readonly whatsNew: WhatsNewService,
-    private readonly admin: AdminService,
   ) {}
 
   /* ───── Public ───── */
@@ -34,58 +33,37 @@ export class WhatsNewController {
 
   /* ───── Admin-protected ───── */
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Get('admin')
-  async listAll(
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
-  ) {
-    await this.admin.requireAdmin(
-      authorization,
-      req?.cookies?.accessToken as string | undefined,
-    );
+  async listAll() {
     return this.whatsNew.findAll();
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Post('admin')
   async create(
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
     @Body() body?: CreateWhatsNewDto,
   ) {
-    await this.admin.requireAdmin(
-      authorization,
-      req?.cookies?.accessToken as string | undefined,
-    );
     if (!body?.title || !body?.content) {
       throw new BadRequestException('Title and content are required');
     }
     return this.whatsNew.create(body);
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('admin/:id')
   async update(
     @Param('id') id: string,
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
     @Body() body?: UpdateWhatsNewDto,
   ) {
-    await this.admin.requireAdmin(
-      authorization,
-      req?.cookies?.accessToken as string | undefined,
-    );
     return this.whatsNew.update(id, body ?? {});
   }
 
+  @UseGuards(AuthGuard, AdminGuard)
   @Delete('admin/:id')
   async remove(
     @Param('id') id: string,
-    @Headers('authorization') authorization?: string,
-    @Req() req?: any,
   ) {
-    await this.admin.requireAdmin(
-      authorization,
-      req?.cookies?.accessToken as string | undefined,
-    );
     return this.whatsNew.delete(id);
   }
 }

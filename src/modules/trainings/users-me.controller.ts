@@ -1,45 +1,29 @@
 import {
   Controller,
   Get,
-  Headers,
-  Req,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { TrainingsService } from './trainings.service';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User, type UserDocument } from '../auth/schemas/user.schema';
 import { UserStatsService } from '../user-stats/user-stats.service';
 import { TrainingSessionsService } from './training-sessions.service';
 
+@UseGuards(AuthGuard)
 @Controller('users')
 export class UsersMeController {
   constructor(
-    private readonly trainings: TrainingsService,
     private readonly userStats: UserStatsService,
     private readonly sessions: TrainingSessionsService,
   ) {}
 
   @Get('me/streaks')
-  async streaks(
-    @Headers('authorization') authorization: string | undefined,
-    @Req() req: any,
-  ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.userStats.getStreakPayload(String(user._id));
+  async streaks(@CurrentUser() user: UserDocument) {
+    return await this.userStats.getStreakPayload(user._id.toString());
   }
 
   @Get('me/weaknesses')
-  async weaknesses(
-    @Headers('authorization') authorization: string | undefined,
-    @Req() req: any,
-  ) {
-    const user = await this.trainings.getUserFromAuthHeader(
-      authorization,
-      req.cookies?.accessToken,
-    );
-    if (!user) throw new UnauthorizedException('Unauthorized');
-    return await this.sessions.getWeaknesses(String(user._id));
+  async weaknesses(@CurrentUser() user: UserDocument) {
+    return await this.sessions.getWeaknesses(user._id.toString());
   }
 }

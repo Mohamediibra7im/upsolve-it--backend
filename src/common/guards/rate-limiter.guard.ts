@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   Inject,
+  HttpException,
 } from '@nestjs/common';
 import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import { Request, Response } from 'express';
@@ -135,7 +136,7 @@ export class RateLimiterGuard implements CanActivate {
         const retryAfter = Math.ceil(rateLimiterRes.msBeforeNext / 1000);
         response.setHeader('Retry-After', retryAfter.toString());
 
-        throw new Error(`Too Many Requests: retry after ${retryAfter} seconds`);
+        throw new HttpException('Too Many Requests', 429);
       }
       throw rateLimiterRes;
     }

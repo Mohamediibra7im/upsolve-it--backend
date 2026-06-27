@@ -16,9 +16,7 @@ import { InitiateResetDto } from './dto/initiate-reset.dto';
 import { VerifySubmissionDto } from './dto/verify-submission.dto';
 import { ResetPinDto } from './dto/reset-pin.dto';
 
-type RequestWithCookies = Request & {
-  cookies?: { refreshToken?: string; accessToken?: string };
-};
+
 
 @Controller('auth')
 export class AuthController {
@@ -62,7 +60,7 @@ export class AuthController {
 
   @Post('refresh')
   async refresh(
-    @Req() req: RequestWithCookies,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const refreshToken = req.cookies?.refreshToken;
@@ -78,7 +76,7 @@ export class AuthController {
 
   @Post('logout')
   async logout(
-    @Req() req: RequestWithCookies,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const isProduction = this.config.get<string>('NODE_ENV') === 'production';
@@ -113,7 +111,7 @@ export class AuthController {
   }
 
   @Post('reset-pin')
-  async resetPin(@Req() req: RequestWithCookies, @Body() dto: ResetPinDto) {
+  async resetPin(@Req() req: Request, @Body() dto: ResetPinDto) {
     const accessToken =
       req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
       req.cookies?.accessToken;
@@ -126,7 +124,7 @@ export class AuthController {
   }
 
   @Post('sync-profile')
-  async syncProfile(@Req() req: RequestWithCookies) {
+  async syncProfile(@Req() req: Request) {
     const token =
       req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
       req.cookies?.accessToken;
@@ -135,7 +133,7 @@ export class AuthController {
   }
 
   @Post('generate-verification-code')
-  async generateVerificationCode(@Req() req: RequestWithCookies) {
+  async generateVerificationCode(@Req() req: Request) {
     const token =
       req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
       req.cookies?.accessToken;
@@ -144,7 +142,7 @@ export class AuthController {
   }
 
   @Post('verify-codeforces-profile')
-  async verifyCodeforcesProfile(@Req() req: RequestWithCookies) {
+  async verifyCodeforcesProfile(@Req() req: Request) {
     const token =
       req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
       req.cookies?.accessToken;

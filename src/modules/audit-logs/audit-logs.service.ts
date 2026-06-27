@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuditLog, AuditLogDocument } from './schemas/audit-log.schema';
 
 @Injectable()
 export class AuditLogsService {
+  private readonly logger = new Logger(AuditLogsService.name);
+
   constructor(
     @InjectModel(AuditLog.name)
     private readonly auditLogModel: Model<AuditLogDocument>,
@@ -29,7 +31,7 @@ export class AuditLogsService {
       });
       return await log.save();
     } catch (error) {
-      console.error('Failed to save audit log:', error);
+      this.logger.error('Failed to save audit log:', error);
       // We don't throw here to prevent breaking the main action if logging fails
     }
   }

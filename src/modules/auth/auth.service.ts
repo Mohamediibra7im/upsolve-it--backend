@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -8,7 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
-import { RateLimiterMemory } from 'rate-limiter-flexible';
+import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import {
   RefreshToken,
   type RefreshTokenDocument,
@@ -21,6 +22,9 @@ import {
   type XpTransactionDocument,
 } from '../roadmap/schemas/xp-transaction.schema';
 import { Types } from 'mongoose';
+import { getRankFromRating } from '../../common/utils/rating';
+import { shouldSyncProfile } from '../../common/utils/profile';
+import { validatePassword } from '../../common/utils/password';
 
 const loginLimiter = new RateLimiterMemory({
   points: 5,
@@ -34,58 +38,12 @@ const refreshLimiter = new RateLimiterMemory({
   blockDuration: 600,
 });
 
-function validatePassword(password: string) {
-  const errors: string[] = [];
-  if (password.length < 8)
-    errors.push('Password must be at least 8 characters long');
-  if (password.length > 128)
-    errors.push('Password must be less than 128 characters');
-  if (!/[a-z]/.test(password))
-    errors.push('Password must contain at least one lowercase letter');
-  if (!/[A-Z]/.test(password))
-    errors.push('Password must contain at least one uppercase letter');
-  if (!/\d/.test(password))
-    errors.push('Password must contain at least one number');
-  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]/.test(password)) {
-    errors.push('Password must contain at least one special character');
-  }
-  const commonPasswords = [
-    'password',
-    '123456789',
-    'qwertyuiop',
-    'asdfghjkl',
-    'zxcvbnm',
-    'admin123',
-    'welcome123',
-    'password123',
-    'qwerty123',
-  ];
-  if (commonPasswords.some((c) => password.toLowerCase().includes(c))) {
-    errors.push('Password contains common patterns and is too weak');
-  }
-  return { isValid: errors.length === 0, errors };
-}
-
-function getRankFromRating(rating: number): string {
-  if (rating === 0) return 'Unrated';
-  if (rating < 1200) return 'Newbie';
-  if (rating < 1400) return 'Pupil';
-  if (rating < 1600) return 'Specialist';
-  if (rating < 1900) return 'Expert';
-  if (rating < 2100) return 'Candidate Master';
-  if (rating < 2300) return 'Master';
-  if (rating < 2400) return 'International Master';
-  if (rating < 2600) return 'Grandmaster';
-  if (rating < 3000) return 'International Grandmaster';
-  return 'Legendary Grandmaster';
-}
-
-function shouldSyncProfile(lastSyncTime?: number) {
-  if (!lastSyncTime) return true;
-  const now = Date.now();
-  const twentyFourHours = 24 * 60 * 60 * 1000;
-  return now - lastSyncTime >= twentyFourHours;
-}
+// ponytail: per-user login fail tracker — 5 wrong → permanent DB lock.
+const loginUserLimiter = new RateLimiterMemory({
+  points: 5,
+  duration: 900,
+  blockDuration: 900,
+});
 
 function generateRefreshToken(): string {
   return crypto.randomBytes(64).toString('hex');
@@ -115,6 +73,14 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  async getUserFromAuthHeader(authHeader?: string, accessTokenCookie?: string) {
+    const token = authHeader?.split(' ')[1] ?? accessTokenCookie;
+    if (!token) return null;
+    const decoded = await this.verifyAccessToken(token);
+    if (!decoded) return null;
+    return await this.userModel.findById(decoded.userId);
   }
 
   async rateLimit(identifier: string, limiter: RateLimiterMemory) {
@@ -226,8 +192,37 @@ export class AuthService {
     }
 
     const user = await this.userModel.findOne({ codeforcesHandle });
+
+    // ponytail: check persistent DB lock before password check.
+    if (user?.locked) {
+      throw new HttpException('Account is locked', 423);
+    }
+
     const ok = user ? await bcrypt.compare(password, user.password) : false;
-    if (!user || !ok) throw new UnauthorizedException('Invalid credentials');
+    if (!user || !ok) {
+      // ponytail: consume a fail point for this user; auto-lock at threshold.
+      if (user) {
+        try {
+          await loginUserLimiter.consume(String(user._id));
+        } catch (err) {
+          if (err instanceof RateLimiterRes) {
+            await this.userModel.findByIdAndUpdate(user._id, { locked: true });
+            await this.auditLogs.logAction(
+              'LOCK_USER',
+              'User',
+              user._id,
+              user.codeforcesHandle,
+              { reason: '5 failed login attempts' },
+              user._id,
+            );
+          }
+        }
+      }
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // ponytail: successful login — reset per-user fail counter.
+    loginUserLimiter.delete(String(user._id));
 
     await this.auditLogs.logAction(
       'LOGIN',
@@ -431,11 +426,11 @@ export class AuthService {
     const currentRating: number = Number(cfUser.rating) || 0;
     const currentRank =
       cfUser.rank ??
-      (currentRating === 0 ? 'Unrated' : getRankFromRating(currentRating));
+      getRankFromRating(currentRating);
     const maxRating: number = Number(cfUser.maxRating) || 0;
     const maxRank =
       cfUser.maxRank ??
-      (maxRating === 0 ? 'Unrated' : getRankFromRating(maxRating));
+      getRankFromRating(maxRating);
 
     const updatedUser = await this.userModel.findByIdAndUpdate(
       decoded.userId,

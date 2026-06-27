@@ -56,28 +56,30 @@ async function bootstrap() {
   });
   app.setGlobalPrefix('api', { exclude: ['/'] });
 
-  // Swagger Configuration
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Upsolve.it - Intelligence Engine')
-    .setDescription(
-      'The scalable intelligence engine powering the Upsolve.it tactical platform.',
-    )
-    .setVersion('2.0')
-    .addTag('Intelligence')
-    .addBearerAuth()
-    .build();
+  // Swagger Configuration — disabled in production
+  if (process.env.NODE_ENV !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Upsolve.it - Intelligence Engine')
+      .setDescription(
+        'The scalable intelligence engine powering the Upsolve.it tactical platform.',
+      )
+      .setVersion('2.0')
+      .addTag('Intelligence')
+      .addBearerAuth()
+      .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  // Serve Swagger at /docs for better asset resolution
-  SwaggerModule.setup('docs', app, document, {
-    customSiteTitle: 'Upsolve.it - Protocol Docs',
-  });
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document, {
+      customSiteTitle: 'Upsolve.it - Protocol Docs',
+    });
+  }
 
   await app.listen(port);
   logger.log(`Application is running on: http://localhost:${port}`);
 }
 
 bootstrap().catch((err) => {
-  console.error(err);
+  // Logger not guaranteed available if bootstrap fails; keep console.error
+  console.error('Failed to bootstrap application:', err);
   process.exit(1);
 });

@@ -43,6 +43,9 @@ export class User {
 
   @Prop({ type: Number, default: null })
   verificationCodeExpiry!: number | null;
+
+  @Prop({ default: false })
+  locked!: boolean;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
