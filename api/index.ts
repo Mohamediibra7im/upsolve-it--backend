@@ -6,7 +6,6 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 
 let cachedApp: any;
@@ -81,24 +80,6 @@ async function createApp() {
     });
 
     nestApp.setGlobalPrefix('api', { exclude: ['/'] });
-
-    const swaggerConfig = new DocumentBuilder()
-        .setTitle('Upsolve.it - Intelligence Engine')
-        .setDescription('The scalable intelligence engine powering the Upsolve.it tactical platform.')
-        .setVersion('2.0')
-        .addTag('Intelligence')
-        .addBearerAuth()
-        .build();
-
-    const document = SwaggerModule.createDocument(nestApp, swaggerConfig);
-    SwaggerModule.setup('docs', nestApp, document, {
-        customSiteTitle: 'Upsolve.it - Protocol Docs',
-        customCssUrl: 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css',
-        customJs: [
-            'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js',
-            'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js',
-        ],
-    });
 
     await nestApp.init();
     cachedApp = app;
