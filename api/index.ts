@@ -93,6 +93,11 @@ async function createApp() {
     const document = SwaggerModule.createDocument(nestApp, swaggerConfig);
     SwaggerModule.setup('docs', nestApp, document, {
         customSiteTitle: 'Upsolve.it - Protocol Docs',
+        customCssUrl: 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css',
+        customJs: [
+            'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js',
+            'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js',
+        ],
     });
 
     await nestApp.init();
