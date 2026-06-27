@@ -10,7 +10,7 @@ import {
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { User, type UserDocument } from '../auth/schemas/user.schema';
+import type { UserDocument } from '../auth/schemas/user.schema';
 import { RoadmapPublicService } from './roadmap-public.service';
 import { RoadmapProgressService } from './roadmap-progress.service';
 import { AdminService } from '../admin/admin.service';
@@ -49,10 +49,7 @@ export class RoadmapPublicController {
 
   @Get('users/:userId/stats')
   @UseGuards(AuthGuard)
-  async getUserStats(
-    @Param('userId') targetUserId: string,
-    @CurrentUser() _user: UserDocument,
-  ) {
+  async getUserStats(@Param('userId') targetUserId: string) {
     return await this.admin.userStats(targetUserId);
   }
 

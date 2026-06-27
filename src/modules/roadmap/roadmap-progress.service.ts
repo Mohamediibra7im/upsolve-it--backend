@@ -381,7 +381,13 @@ export class RoadmapProgressService {
     filter: Record<string, unknown>,
     progressModel: Model<any>,
   ): Promise<number> {
-    const earned = await this.awardXp(userId, amount, reason, sourceType, sourceId);
+    const earned = await this.awardXp(
+      userId,
+      amount,
+      reason,
+      sourceType,
+      sourceId,
+    );
     if (earned > 0) {
       await progressModel.updateOne(filter, { $set: { xpAwarded: true } });
     }
@@ -595,7 +601,10 @@ export class RoadmapProgressService {
 
     const watchPct = Math.min(
       100,
-      Math.max(existing?.watchPct ?? 0, dto.watchPct ?? existing?.watchPct ?? 0),
+      Math.max(
+        existing?.watchPct ?? 0,
+        dto.watchPct ?? existing?.watchPct ?? 0,
+      ),
     );
     const lastPositionSec = Math.max(
       0,
@@ -690,7 +699,12 @@ export class RoadmapProgressService {
     const topic = await this.topicModel.findById(tId).lean();
     if (!topic) throw new NotFoundException('Topic not found');
 
-    await this.checkLearningGate(userId, tId, language, topic.requiredLearningPct);
+    await this.checkLearningGate(
+      userId,
+      tId,
+      language,
+      topic.requiredLearningPct,
+    );
 
     const user = await this.userModel
       .findById(userId)
@@ -732,8 +746,14 @@ export class RoadmapProgressService {
     if (allContestIds.size > 0) {
       const uniqueContestIds = Array.from(allContestIds);
       const [standingsSolved, statusSolved] = await Promise.all([
-        this.fetchSolvedFromGymContests(user.codeforcesHandle, uniqueContestIds).catch(() => new Set<string>()),
-        this.fetchSolvedFromContestStatus(user.codeforcesHandle, uniqueContestIds).catch(() => new Set<string>()),
+        this.fetchSolvedFromGymContests(
+          user.codeforcesHandle,
+          uniqueContestIds,
+        ).catch(() => new Set<string>()),
+        this.fetchSolvedFromContestStatus(
+          user.codeforcesHandle,
+          uniqueContestIds,
+        ).catch(() => new Set<string>()),
       ]);
       for (const key of standingsSolved) solvedFromStatus.add(key);
       for (const key of statusSolved) solvedFromStatus.add(key);
@@ -825,7 +845,12 @@ export class RoadmapProgressService {
     if (!topic) throw new NotFoundException('Topic not found');
 
     if (solved) {
-      await this.checkLearningGate(userId, topic._id, language, topic.requiredLearningPct);
+      await this.checkLearningGate(
+        userId,
+        topic._id,
+        language,
+        topic.requiredLearningPct,
+      );
     }
 
     const userOid = new Types.ObjectId(userId);
@@ -1044,7 +1069,15 @@ export class RoadmapProgressService {
       .lean();
 
     if (total === 0) {
-      return { leaderboard: [], top3: [], total, page, pageSize, totalPages, myRank: null };
+      return {
+        leaderboard: [],
+        top3: [],
+        total,
+        page,
+        pageSize,
+        totalPages,
+        myRank: null,
+      };
     }
 
     // Collect all unique userIds from both top3 and current page
@@ -1072,10 +1105,16 @@ export class RoadmapProgressService {
 
     const userMap = new Map(users.map((u) => [String(u._id), u]));
     const topicMap = new Map<string, number>(
-      topicCounts.map((t: { _id: any; count: number }) => [String(t._id), t.count]),
+      topicCounts.map((t: { _id: any; count: number }) => [
+        String(t._id),
+        t.count,
+      ]),
     );
     const problemMap = new Map<string, number>(
-      problemCounts.map((p: { _id: any; count: number }) => [String(p._id), p.count]),
+      problemCounts.map((p: { _id: any; count: number }) => [
+        String(p._id),
+        p.count,
+      ]),
     );
 
     const buildEntry = (xp: { userId: any; totalXp: number }, rank: number) => {
@@ -1111,9 +1150,14 @@ export class RoadmapProgressService {
     // Calculate current user's rank
     let myRank: number | null = null;
     if (userId) {
-      const userXp = await this.xpModel.findOne({ userId }).select('totalXp').lean();
+      const userXp = await this.xpModel
+        .findOne({ userId })
+        .select('totalXp')
+        .lean();
       if (userXp) {
-        const higherCount = await this.xpModel.countDocuments({ totalXp: { $gt: userXp.totalXp } });
+        const higherCount = await this.xpModel.countDocuments({
+          totalXp: { $gt: userXp.totalXp },
+        });
         myRank = higherCount + 1;
       }
     }
@@ -1212,12 +1256,18 @@ export class RoadmapProgressService {
     const topic = await this.topicModel.findById(tId).lean();
     if (!topic) throw new NotFoundException('Topic not found');
 
-    await this.checkLearningGate(userId, tId, language, topic.requiredLearningPct);
+    await this.checkLearningGate(
+      userId,
+      tId,
+      language,
+      topic.requiredLearningPct,
+    );
 
     const filter: Record<string, unknown> = { topicId: tId };
     if (language) filter.language = language;
     const resources = await this.resourceModel.find(filter).lean();
-    if (resources.length === 0) return { ok: true, xpEarned: 0, learningPct: 100 };
+    if (resources.length === 0)
+      return { ok: true, xpEarned: 0, learningPct: 100 };
 
     const userOid = new Types.ObjectId(userId);
     let xpEarned = 0;
@@ -1263,7 +1313,11 @@ export class RoadmapProgressService {
       }
     }
 
-    const progressUpdates = await this.updateTopicAndLevelProgress(userId, tId, language);
+    const progressUpdates = await this.updateTopicAndLevelProgress(
+      userId,
+      tId,
+      language,
+    );
 
     return {
       ok: true,
@@ -1324,9 +1378,7 @@ export class RoadmapProgressService {
 
     // When switching language, also revoke all problem XP for this topic
     // (problems are unlocked by learning progress, so resetting learning = re-locking problems)
-    const topicProblems = await this.problemModel
-      .find({ topicId: tId })
-      .lean();
+    const topicProblems = await this.problemModel.find({ topicId: tId }).lean();
     if (topicProblems.length > 0) {
       const problemIds = topicProblems.map((p) => p._id);
       const solvedWithXp = await this.problemProgressModel

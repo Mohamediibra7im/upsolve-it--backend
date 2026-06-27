@@ -11,7 +11,7 @@ import {
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { User, type UserDocument } from '../auth/schemas/user.schema';
+import type { UserDocument } from '../auth/schemas/user.schema';
 import { RoadmapAdminService } from './roadmap-admin.service';
 import { RoadmapProgressService } from './roadmap-progress.service';
 import { CreateLevelDto } from './dto/create-level.dto';
@@ -152,10 +152,7 @@ export class RoadmapAdminController {
 
   @UseGuards(AuthGuard, AdminGuard)
   @Patch('topics/:id/reorder')
-  async reorderTopic(
-    @Param('id') id: string,
-    @Body() body: ReorderDto,
-  ) {
+  async reorderTopic(@Param('id') id: string, @Body() body: ReorderDto) {
     const topic = await this.roadmap.reorderTopicOnly(id, body.orderIndex);
     return { topic };
   }
@@ -211,10 +208,7 @@ export class RoadmapAdminController {
 
   @UseGuards(AuthGuard, AdminGuard)
   @Patch('resources/:id/reorder')
-  async reorderResource(
-    @Param('id') id: string,
-    @Body() body: ReorderDto,
-  ) {
+  async reorderResource(@Param('id') id: string, @Body() body: ReorderDto) {
     const resource = await this.roadmap.reorderResourceOnly(
       id,
       body.orderIndex,
@@ -286,10 +280,7 @@ export class RoadmapAdminController {
 
   @UseGuards(AuthGuard, AdminGuard)
   @Patch('problems/:id/reorder')
-  async reorderProblem(
-    @Param('id') id: string,
-    @Body() body: ReorderDto,
-  ) {
+  async reorderProblem(@Param('id') id: string, @Body() body: ReorderDto) {
     const problem = await this.roadmap.reorderProblemOnly(id, body.orderIndex);
     return { problem };
   }

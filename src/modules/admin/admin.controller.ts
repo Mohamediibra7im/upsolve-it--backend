@@ -12,7 +12,7 @@ import {
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { User, type UserDocument } from '../auth/schemas/user.schema';
+import type { UserDocument } from '../auth/schemas/user.schema';
 import { AdminService } from './admin.service';
 import { ContactService } from '../contact/contact.service';
 import { TrainingLevelsService } from '../training-levels/training-levels.service';
@@ -34,10 +34,7 @@ export class AdminController {
 
   @UseGuards(AuthGuard, AdminGuard)
   @Get('users')
-  async users(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
+  async users(@Query('page') page?: string, @Query('limit') limit?: string) {
     return await this.admin.listUsers(Number(page) || 1, Number(limit) || 50);
   }
 
@@ -56,9 +53,7 @@ export class AdminController {
 
   @UseGuards(AuthGuard, AdminGuard)
   @Get('users/:userId/stats')
-  async userStats(
-    @Param('userId') userId: string,
-  ) {
+  async userStats(@Param('userId') userId: string) {
     return await this.admin.userStats(userId);
   }
 
@@ -116,9 +111,7 @@ export class AdminController {
   /** Replace DB contents with built-in default levels (110 rows, same as cold-start seed). */
   @UseGuards(AuthGuard, AdminGuard)
   @Post('levels/reseed')
-  async reseedTrainingLevels(
-    @CurrentUser() current: UserDocument,
-  ) {
+  async reseedTrainingLevels(@CurrentUser() current: UserDocument) {
     return await this.trainingLevels.reseedFromSeedFile({
       adminId: current._id.toString(),
       adminHandle: current.codeforcesHandle ?? 'admin',
@@ -155,9 +148,7 @@ export class AdminController {
 
   @UseGuards(AuthGuard, AdminGuard)
   @Patch('contact/:id/read')
-  async markContactRead(
-    @Param('id') id: string,
-  ) {
+  async markContactRead(@Param('id') id: string) {
     return this.contact.markAsRead(id);
   }
 

@@ -16,8 +16,6 @@ import { InitiateResetDto } from './dto/initiate-reset.dto';
 import { VerifySubmissionDto } from './dto/verify-submission.dto';
 import { ResetPinDto } from './dto/reset-pin.dto';
 
-
-
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -75,10 +73,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  async logout(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const isProduction = this.config.get<string>('NODE_ENV') === 'production';
     const refreshToken = req.cookies?.refreshToken;
     if (refreshToken) await this.auth.logout(refreshToken);

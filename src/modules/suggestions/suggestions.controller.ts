@@ -19,9 +19,7 @@ import {
 
 @Controller('suggestions')
 export class SuggestionsController {
-  constructor(
-    private readonly suggestions: SuggestionsService,
-  ) {}
+  constructor(private readonly suggestions: SuggestionsService) {}
 
   /* ---- Public ---- */
 
@@ -40,9 +38,7 @@ export class SuggestionsController {
 
   @UseGuards(AuthGuard, AdminGuard)
   @Post('admin')
-  async create(
-    @Body() body?: CreateSuggestionDto,
-  ) {
+  async create(@Body() body?: CreateSuggestionDto) {
     if (!body?.title || !body?.url) {
       throw new BadRequestException('Title and URL are required');
     }
@@ -51,18 +47,13 @@ export class SuggestionsController {
 
   @UseGuards(AuthGuard, AdminGuard)
   @Patch('admin/:id')
-  async update(
-    @Param('id') id: string,
-    @Body() body?: UpdateSuggestionDto,
-  ) {
+  async update(@Param('id') id: string, @Body() body?: UpdateSuggestionDto) {
     return this.suggestions.update(id, body ?? {});
   }
 
   @UseGuards(AuthGuard, AdminGuard)
   @Delete('admin/:id')
-  async remove(
-    @Param('id') id: string,
-  ) {
+  async remove(@Param('id') id: string) {
     return this.suggestions.delete(id);
   }
 }

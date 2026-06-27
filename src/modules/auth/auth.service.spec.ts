@@ -19,13 +19,6 @@ jest.mock('bcryptjs', () => ({
   compare: jest.fn(),
 }));
 
-const mockQuery = <T>(data: T) => ({
-  select: jest.fn().mockReturnThis(),
-  sort: jest.fn().mockReturnThis(),
-  limit: jest.fn().mockReturnThis(),
-  lean: jest.fn().mockResolvedValue(data),
-});
-
 const createModel = () => ({
   find: jest.fn(),
   findOne: jest.fn(),
@@ -89,9 +82,15 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: getModelToken(User.name), useValue: userModel },
-        { provide: getModelToken(RefreshToken.name), useValue: refreshTokenModel },
+        {
+          provide: getModelToken(RefreshToken.name),
+          useValue: refreshTokenModel,
+        },
         { provide: getModelToken(UserXp.name), useValue: xpModel },
-        { provide: getModelToken(XpTransaction.name), useValue: xpTransactionModel },
+        {
+          provide: getModelToken(XpTransaction.name),
+          useValue: xpTransactionModel,
+        },
         { provide: JwtService, useValue: jwtService },
         { provide: AuditLogsService, useValue: auditLogs },
       ],

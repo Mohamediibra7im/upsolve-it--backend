@@ -424,13 +424,9 @@ export class AuthService {
     const cfUser = data.result[0];
 
     const currentRating: number = Number(cfUser.rating) || 0;
-    const currentRank =
-      cfUser.rank ??
-      getRankFromRating(currentRating);
+    const currentRank = cfUser.rank ?? getRankFromRating(currentRating);
     const maxRating: number = Number(cfUser.maxRating) || 0;
-    const maxRank =
-      cfUser.maxRank ??
-      getRankFromRating(maxRating);
+    const maxRank = cfUser.maxRank ?? getRankFromRating(maxRating);
 
     const updatedUser = await this.userModel.findByIdAndUpdate(
       decoded.userId,

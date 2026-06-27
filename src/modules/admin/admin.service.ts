@@ -67,7 +67,7 @@ export class AdminService {
   }
 
   async stats() {
-    const { now, thirtyDaysAgo, trendStart, trendStartMs } =
+    const { thirtyDaysAgo, trendStart, trendStartMs } =
       this.getDateBoundaries();
 
     const solvedProblemsExpression = this.getSolvedExpression();
@@ -374,9 +374,7 @@ export class AdminService {
     };
   }
 
-  private buildRatingBands(
-    ratingBandsRaw: { _id: string; count: number }[],
-  ) {
+  private buildRatingBands(ratingBandsRaw: { _id: string; count: number }[]) {
     const ratingBandOrder = [
       '<1200',
       '1200-1399',
@@ -684,13 +682,9 @@ export class AdminService {
     const cfUser = data.result[0];
 
     const currentRating = Number(cfUser.rating ?? 0);
-    const currentRank =
-      cfUser.rank ??
-      getRankFromRating(currentRating);
+    const currentRank = cfUser.rank ?? getRankFromRating(currentRating);
     const maxRating = Number(cfUser.maxRating ?? 0);
-    const maxRank =
-      cfUser.maxRank ??
-      getRankFromRating(maxRating);
+    const maxRank = cfUser.maxRank ?? getRankFromRating(maxRating);
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(
@@ -781,13 +775,9 @@ export class AdminService {
       }
 
       const currentRating: number = Number(cfUser.rating) || 0;
-      const currentRank =
-        cfUser.rank ??
-        getRankFromRating(currentRating);
+      const currentRank = cfUser.rank ?? getRankFromRating(currentRating);
       const maxRating: number = Number(cfUser.maxRating) || 0;
-      const maxRank =
-        cfUser.maxRank ??
-        getRankFromRating(maxRating);
+      const maxRank = cfUser.maxRank ?? getRankFromRating(maxRating);
 
       await this.userModel.findByIdAndUpdate(user._id, {
         rating: currentRating,
@@ -851,4 +841,3 @@ export class AdminService {
     return { message: 'User unlocked' };
   }
 }
-

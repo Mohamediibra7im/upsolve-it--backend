@@ -1,11 +1,7 @@
-import {
-  Controller,
-  Get,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { User, type UserDocument } from '../auth/schemas/user.schema';
+import type { UserDocument } from '../auth/schemas/user.schema';
 import { UserStatsService } from '../user-stats/user-stats.service';
 import { TrainingSessionsService } from './training-sessions.service';
 

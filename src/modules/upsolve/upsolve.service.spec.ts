@@ -41,8 +41,14 @@ describe('UpsolveService', () => {
       providers: [
         UpsolveService,
         { provide: getModelToken(User.name), useValue: userModel },
-        { provide: getModelToken(UpsolvedProblem.name), useValue: upsolveModel },
-        { provide: getModelToken(DismissedUpsolve.name), useValue: dismissedModel },
+        {
+          provide: getModelToken(UpsolvedProblem.name),
+          useValue: upsolveModel,
+        },
+        {
+          provide: getModelToken(DismissedUpsolve.name),
+          useValue: dismissedModel,
+        },
         { provide: AuthService, useValue: authService },
       ],
     }).compile();
@@ -93,7 +99,14 @@ describe('UpsolveService', () => {
   describe('insertMany', () => {
     it('inserts problems with user field', async () => {
       const problems = [
-        { contestId: 1, index: 'A', name: 'Test', rating: 800, tags: [], url: '/test' },
+        {
+          contestId: 1,
+          index: 'A',
+          name: 'Test',
+          rating: 800,
+          tags: [],
+          url: '/test',
+        },
       ];
       upsolveModel.insertMany.mockResolvedValue(undefined);
 

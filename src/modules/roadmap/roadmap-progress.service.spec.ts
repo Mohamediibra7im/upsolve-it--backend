@@ -69,14 +69,32 @@ describe('RoadmapProgressService', () => {
         { provide: getModelToken(User.name), useValue: userModel },
         { provide: getModelToken(RoadmapLevel.name), useValue: levelModel },
         { provide: getModelToken(RoadmapTopic.name), useValue: topicModel },
-        { provide: getModelToken(RoadmapResource.name), useValue: resourceModel },
+        {
+          provide: getModelToken(RoadmapResource.name),
+          useValue: resourceModel,
+        },
         { provide: getModelToken(RoadmapProblem.name), useValue: problemModel },
-        { provide: getModelToken(UserResourceProgress.name), useValue: resourceProgressModel },
-        { provide: getModelToken(UserProblemProgress.name), useValue: problemProgressModel },
-        { provide: getModelToken(UserTopicProgress.name), useValue: topicProgressModel },
-        { provide: getModelToken(UserLevelProgress.name), useValue: levelProgressModel },
+        {
+          provide: getModelToken(UserResourceProgress.name),
+          useValue: resourceProgressModel,
+        },
+        {
+          provide: getModelToken(UserProblemProgress.name),
+          useValue: problemProgressModel,
+        },
+        {
+          provide: getModelToken(UserTopicProgress.name),
+          useValue: topicProgressModel,
+        },
+        {
+          provide: getModelToken(UserLevelProgress.name),
+          useValue: levelProgressModel,
+        },
         { provide: getModelToken(UserXp.name), useValue: xpModel },
-        { provide: getModelToken(XpTransaction.name), useValue: xpTransactionModel },
+        {
+          provide: getModelToken(XpTransaction.name),
+          useValue: xpTransactionModel,
+        },
       ],
     }).compile();
 
@@ -118,20 +136,27 @@ describe('RoadmapProgressService', () => {
 
     // topic/level progress stubs
     topicModel.findById.mockImplementation(() =>
-      mockQuery({ _id: topicId, levelId, requiredLearningPct: 80, requiredProblemPct: 60, topicXpReward: 100, title: 'Test' }),
+      mockQuery({
+        _id: topicId,
+        levelId,
+        requiredLearningPct: 80,
+        requiredProblemPct: 60,
+        topicXpReward: 100,
+        title: 'Test',
+      }),
     );
     levelModel.findById.mockImplementation(() =>
       mockQuery({ _id: levelId, levelBonusXp: 500 }),
     );
-    resourceModel.find.mockImplementation(() => mockQuery([
-      { _id: resourceId, type: 'Article', weight: 100, language: 'English' },
-    ]));
-    resourceProgressModel.find.mockImplementation(() => mockQuery([
-      { resourceId, isCompleted: true, watchPct: 0 },
-    ]));
-    topicModel.find.mockImplementation(() => mockQuery([
-      { _id: topicId },
-    ]));
+    resourceModel.find.mockImplementation(() =>
+      mockQuery([
+        { _id: resourceId, type: 'Article', weight: 100, language: 'English' },
+      ]),
+    );
+    resourceProgressModel.find.mockImplementation(() =>
+      mockQuery([{ resourceId, isCompleted: true, watchPct: 0 }]),
+    );
+    topicModel.find.mockImplementation(() => mockQuery([{ _id: topicId }]));
     problemModel.find.mockImplementation(() => mockQuery([]));
     problemProgressModel.countDocuments.mockResolvedValue(0);
     topicProgressModel.findOne.mockResolvedValue(null);
@@ -183,20 +208,27 @@ describe('RoadmapProgressService', () => {
     resourceProgressModel.updateOne.mockResolvedValue(null);
 
     topicModel.findById.mockImplementation(() =>
-      mockQuery({ _id: topicId, levelId, requiredLearningPct: 80, requiredProblemPct: 60, topicXpReward: 100, title: 'Test' }),
+      mockQuery({
+        _id: topicId,
+        levelId,
+        requiredLearningPct: 80,
+        requiredProblemPct: 60,
+        topicXpReward: 100,
+        title: 'Test',
+      }),
     );
     levelModel.findById.mockImplementation(() =>
       mockQuery({ _id: levelId, levelBonusXp: 500 }),
     );
-    resourceModel.find.mockImplementation(() => mockQuery([
-      { _id: resourceId, type: 'Article', weight: 100, language: 'English' },
-    ]));
-    resourceProgressModel.find.mockImplementation(() => mockQuery([
-      { resourceId, isCompleted: true, watchPct: 0 },
-    ]));
-    topicModel.find.mockImplementation(() => mockQuery([
-      { _id: topicId },
-    ]));
+    resourceModel.find.mockImplementation(() =>
+      mockQuery([
+        { _id: resourceId, type: 'Article', weight: 100, language: 'English' },
+      ]),
+    );
+    resourceProgressModel.find.mockImplementation(() =>
+      mockQuery([{ resourceId, isCompleted: true, watchPct: 0 }]),
+    );
+    topicModel.find.mockImplementation(() => mockQuery([{ _id: topicId }]));
     problemModel.find.mockImplementation(() => mockQuery([]));
     problemProgressModel.countDocuments.mockResolvedValue(0);
     topicProgressModel.findOne.mockResolvedValue(null);
@@ -254,10 +286,22 @@ describe('RoadmapProgressService', () => {
     const problemId = new Types.ObjectId();
 
     problemModel.findById.mockImplementation(() =>
-      mockQuery({ _id: problemId, topicId, xpReward: 40, name: 'Test Problem' }),
+      mockQuery({
+        _id: problemId,
+        topicId,
+        xpReward: 40,
+        name: 'Test Problem',
+      }),
     );
     topicModel.findById.mockImplementation(() =>
-      mockQuery({ _id: topicId, levelId, requiredLearningPct: 0, requiredProblemPct: 0, topicXpReward: 100, title: 'Test' }),
+      mockQuery({
+        _id: topicId,
+        levelId,
+        requiredLearningPct: 0,
+        requiredProblemPct: 0,
+        topicXpReward: 100,
+        title: 'Test',
+      }),
     );
     levelModel.findById.mockImplementation(() =>
       mockQuery({ _id: levelId, levelBonusXp: 500 }),
@@ -265,11 +309,13 @@ describe('RoadmapProgressService', () => {
 
     // Simulate progress doc already has xpAwarded: false (ready to award)
     problemProgressModel.updateOne.mockResolvedValue(null);
-    problemProgressModel.findOne.mockImplementation(() => mockQuery({
-      _id: new Types.ObjectId(),
-      isSolved: true,
-      xpAwarded: false,
-    }));
+    problemProgressModel.findOne.mockImplementation(() =>
+      mockQuery({
+        _id: new Types.ObjectId(),
+        isSolved: true,
+        xpAwarded: false,
+      }),
+    );
 
     // Transaction create throws duplicate key error
     const dupError = Object.assign(new Error('duplicate key'), { code: 11000 });
@@ -277,9 +323,7 @@ describe('RoadmapProgressService', () => {
 
     xpModel.findOneAndUpdate.mockResolvedValue(null);
     resourceModel.find.mockImplementation(() => mockQuery([]));
-    topicModel.find.mockImplementation(() => mockQuery([
-      { _id: topicId },
-    ]));
+    topicModel.find.mockImplementation(() => mockQuery([{ _id: topicId }]));
     problemModel.find.mockImplementation(() => mockQuery([{ _id: problemId }]));
     problemProgressModel.countDocuments.mockResolvedValue(1);
     topicProgressModel.findOne.mockResolvedValue(null);
@@ -288,7 +332,11 @@ describe('RoadmapProgressService', () => {
     levelProgressModel.updateOne.mockResolvedValue(null);
     levelProgressModel.findOneAndUpdate.mockResolvedValue(null);
 
-    const result = await service.toggleProblemSolved(userId, problemId.toString(), true);
+    const result = await service.toggleProblemSolved(
+      userId,
+      problemId.toString(),
+      true,
+    );
 
     // Even with 11000, xpDelta should reflect the problem reward (tx was already there)
     expect(result.xpDelta).toBe(40);

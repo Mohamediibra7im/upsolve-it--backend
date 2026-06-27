@@ -41,11 +41,16 @@ async function bootstrap() {
     'https://upsolve-it.hnuicpc.tech',
   ].filter(Boolean);
 
-  const vercelWildcard = /^https?:\/\/[a-zA-Z0-9.-]+\.(vercel\.app|hnuicpc\.tech)$/;
+  const vercelWildcard =
+    /^https?:\/\/[a-zA-Z0-9.-]+\.(vercel\.app|hnuicpc\.tech)$/;
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || staticOrigins.includes(origin) || vercelWildcard.test(origin)) {
+      if (
+        !origin ||
+        staticOrigins.includes(origin) ||
+        vercelWildcard.test(origin)
+      ) {
         callback(null, true);
       } else {
         logger.warn(`CORS blocked origin: ${origin}`);

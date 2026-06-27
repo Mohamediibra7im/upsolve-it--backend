@@ -10,7 +10,12 @@ import {
 
 // ponytail: stdlib escape, no dep needed.
 function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 export type ContactFormData = {
@@ -135,14 +140,21 @@ export class ContactService {
   async listMessages(page = 1, limit = 50) {
     const skip = (page - 1) * limit;
     const [messages, total] = await Promise.all([
-      this.contactModel.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      this.contactModel
+        .find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       this.contactModel.countDocuments({}),
     ]);
     return { messages, total, page, limit };
   }
 
   async markAsRead(id: string) {
-    return this.contactModel.findByIdAndUpdate(id, { read: true }, { new: true }).lean();
+    return this.contactModel
+      .findByIdAndUpdate(id, { read: true }, { new: true })
+      .lean();
   }
 
   async sendReply(id: string, replyBody: string) {

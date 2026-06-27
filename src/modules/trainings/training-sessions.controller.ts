@@ -1,22 +1,13 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { User, type UserDocument } from '../auth/schemas/user.schema';
+import type { UserDocument } from '../auth/schemas/user.schema';
 import { TrainingSessionsService } from './training-sessions.service';
 
 @UseGuards(AuthGuard)
 @Controller('training-sessions')
 export class TrainingSessionsController {
-  constructor(
-    private readonly sessions: TrainingSessionsService,
-  ) {}
+  constructor(private readonly sessions: TrainingSessionsService) {}
 
   @Post()
   async create(
@@ -69,10 +60,7 @@ export class TrainingSessionsController {
   }
 
   @Get(':id/review')
-  async review(
-    @Param('id') id: string,
-    @CurrentUser() user: UserDocument,
-  ) {
+  async review(@Param('id') id: string, @CurrentUser() user: UserDocument) {
     return await this.sessions.getReview(user._id.toString(), id);
   }
 }

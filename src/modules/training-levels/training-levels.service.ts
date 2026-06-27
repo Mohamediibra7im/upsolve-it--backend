@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -36,9 +41,7 @@ export class TrainingLevelsService implements OnModuleInit {
 
     const ok = getDefaultTrainingLevelDocs();
     await this.trainingLevelModel.insertMany(ok);
-    this.logger.log(
-      `Seeded ${ok.length} default training levels.`,
-    );
+    this.logger.log(`Seeded ${ok.length} default training levels.`);
   }
 
   /** Replace all rows with the built-in 110-level defaults (admin). */

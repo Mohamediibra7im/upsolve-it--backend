@@ -222,9 +222,16 @@ export class TrainingSessionsService {
         .filter((p) => isProblemMarkedSolved(p) && p.solvedAt != null)
         .sort((a, b) => (a.solvedAt ?? 0) - (b.solvedAt ?? 0));
       for (const p of solved) {
-        const incremental = Math.max(0, Math.round(((p.solvedAt ?? prev) - prev) / 1000));
+        const incremental = Math.max(
+          0,
+          Math.round(((p.solvedAt ?? prev) - prev) / 1000),
+        );
         p.timeSpentSeconds = incremental;
-        p.speedStatus = computeSpeedStatus(true, incremental, p.expectedTimeSeconds ?? expectedTimeSecondsFromRating(p.rating ?? 0));
+        p.speedStatus = computeSpeedStatus(
+          true,
+          incremental,
+          p.expectedTimeSeconds ?? expectedTimeSecondsFromRating(p.rating ?? 0),
+        );
         prev = p.solvedAt ?? prev;
       }
     }

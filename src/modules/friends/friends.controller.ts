@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { User, type UserDocument } from '../auth/schemas/user.schema';
+import type { UserDocument } from '../auth/schemas/user.schema';
 import { FriendsService } from './friends.service';
 import { AddFriendDto } from './dto/add-friend.dto';
 
@@ -19,9 +19,7 @@ import { AddFriendDto } from './dto/add-friend.dto';
  */
 @Controller('friends')
 export class FriendsController {
-  constructor(
-    private readonly friends: FriendsService,
-  ) {}
+  constructor(private readonly friends: FriendsService) {}
 
   @UseGuards(AuthGuard)
   @Get('requests')

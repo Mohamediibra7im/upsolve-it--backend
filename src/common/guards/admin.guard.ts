@@ -7,7 +7,7 @@ import {
 
 @Injectable()
 export class AdminGuard implements CanActivate {
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest();
     const user = req.user;
 
