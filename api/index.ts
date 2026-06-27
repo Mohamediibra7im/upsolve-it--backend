@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 
 let cachedApp: any;
@@ -80,6 +81,18 @@ async function createApp() {
     });
 
     nestApp.setGlobalPrefix('api', { exclude: ['/'] });
+
+    // Generate and serve OpenAPI spec as JSON (no UI — use any OpenAPI viewer)
+    const openApiConfig = new DocumentBuilder()
+        .setTitle('Upsolve.it - Intelligence Engine')
+        .setDescription('The scalable intelligence engine powering the Upsolve.it tactical platform.')
+        .setVersion('2.0')
+        .addTag('Intelligence')
+        .addBearerAuth()
+        .build();
+
+    const openApiDocument = SwaggerModule.createDocument(nestApp, openApiConfig);
+    app.get('/docs-json', (_req, res) => res.json(openApiDocument));
 
     await nestApp.init();
     cachedApp = app;
