@@ -461,15 +461,24 @@ export class AdminService {
     return Array.from(trendMap.values());
   }
 
+  // ponytail: skip countDocuments when limit=0 (returns all), lean() avoids Mongoose hydration
   async listUsers(page = 1, limit = 50) {
     const skip = (page - 1) * limit;
+    const returnAll = limit === 0;
+
+    const usersQuery = this.userModel
+      .find({})
+      .select('codeforcesHandle role rating rank avatar createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (returnAll) {
+      const users = await usersQuery;
+      return { users, total: users.length, page: 1, limit: 0 };
+    }
+
     const [users, total] = await Promise.all([
-      this.userModel
-        .find({})
-        .select('codeforcesHandle role rating rank avatar createdAt')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
+      usersQuery.skip(skip).limit(limit),
       this.userModel.countDocuments({}),
     ]);
     return { users, total, page, limit };
