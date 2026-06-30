@@ -36,7 +36,8 @@ export class AdminController {
   @UseGuards(AuthGuard, AdminGuard)
   @Get('users')
   async users(@Query('page') page?: string, @Query('limit') limit?: string) {
-    return await this.admin.listUsers(Number(page) || 1, Number(limit) || 50);
+    // ponytail: || treats limit=0 as falsy, use ternary to preserve explicit 0
+    return await this.admin.listUsers(page ? Number(page) : 1, limit ? Number(limit) : 50);
   }
 
   @UseGuards(AuthGuard, AdminGuard)
