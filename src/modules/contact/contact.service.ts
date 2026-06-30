@@ -191,4 +191,8 @@ export class ContactService {
 
     return { success: true };
   }
+
+  async deleteMessage(id: string) {
+    return this.contactModel.findByIdAndDelete(id).lean();
+  }
 }

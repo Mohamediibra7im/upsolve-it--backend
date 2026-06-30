@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -159,5 +160,11 @@ export class AdminController {
     @Body('message') message: string,
   ) {
     return this.contact.sendReply(id, message);
+  }
+
+  @UseGuards(AuthGuard, AdminGuard)
+  @Delete('contact/:id')
+  async deleteContactMessage(@Param('id') id: string) {
+    return this.contact.deleteMessage(id);
   }
 }
