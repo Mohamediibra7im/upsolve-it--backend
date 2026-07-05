@@ -22,7 +22,6 @@ export class TrainingsService {
     private readonly trainingModel: Model<TrainingDocument>,
   ) {}
 
-
   async createTraining(userId: string, body: Record<string, any>) {
     const rest = { ...body };
     delete rest._id;

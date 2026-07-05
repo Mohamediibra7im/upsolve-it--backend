@@ -4,6 +4,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { UserDocument } from '../auth/schemas/user.schema';
 import { TrainingSessionsService } from './training-sessions.service';
 
+import { CreateTrainingDto } from './dto/create-training.dto';
+
 @UseGuards(AuthGuard)
 @Controller('training-sessions')
 export class TrainingSessionsController {
@@ -11,7 +13,7 @@ export class TrainingSessionsController {
 
   @Post()
   async create(
-    @Body() body: Record<string, unknown>,
+    @Body() body: CreateTrainingDto,
     @CurrentUser() user: UserDocument,
   ) {
     const doc = await this.sessions.createSession(user._id.toString(), body);

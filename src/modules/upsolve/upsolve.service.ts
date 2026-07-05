@@ -23,7 +23,6 @@ export class UpsolveService {
     private readonly dismissedModel: Model<DismissedUpsolveDocument>,
   ) {}
 
-
   async list(userId: string) {
     return await this.upsolveModel
       .find({ user: userId })

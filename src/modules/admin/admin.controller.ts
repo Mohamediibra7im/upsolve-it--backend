@@ -37,7 +37,10 @@ export class AdminController {
   @Get('users')
   async users(@Query('page') page?: string, @Query('limit') limit?: string) {
     // ponytail: || treats limit=0 as falsy, use ternary to preserve explicit 0
-    return await this.admin.listUsers(page ? Number(page) : 1, limit ? Number(limit) : 50);
+    return await this.admin.listUsers(
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 50,
+    );
   }
 
   @UseGuards(AuthGuard, AdminGuard)

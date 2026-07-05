@@ -12,13 +12,18 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { UserDocument } from '../auth/schemas/user.schema';
 import { TrainingsService } from './trainings.service';
 
+import { CreateTrainingDto } from './dto/create-training.dto';
+
 @UseGuards(AuthGuard)
 @Controller('trainings')
 export class TrainingsController {
   constructor(private readonly trainings: TrainingsService) {}
 
   @Post()
-  async create(@Body() body: any, @CurrentUser() user: UserDocument) {
+  async create(
+    @Body() body: CreateTrainingDto,
+    @CurrentUser() user: UserDocument,
+  ) {
     const training = await this.trainings.createTraining(
       user._id.toString(),
       body,

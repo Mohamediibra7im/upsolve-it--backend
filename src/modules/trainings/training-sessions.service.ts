@@ -12,6 +12,7 @@ import {
   type TrainingMode,
   type TrainingProblemStored,
 } from './schemas/training.schema';
+import { CreateTrainingDto } from './dto/create-training.dto';
 import { expectedTimeSecondsFromRating } from './utils/expected-time';
 import { computeSpeedStatus, type SpeedStatus } from './utils/speed-status';
 import { buildInsightAndRecommendation } from './utils/insights';
@@ -32,26 +33,26 @@ export class TrainingSessionsService {
     private readonly upsolve: UpsolveService,
   ) {}
 
-  async createSession(userId: string, body: Record<string, unknown>) {
+  async createSession(userId: string, body: CreateTrainingDto) {
     const problems = ensureProblemIds(
       (body.problems as TrainingProblemStored[]) ?? [],
     ).map((p) => this.withExpectedDefaults(p));
 
     const doc = await this.trainingModel.create({
       user: new Types.ObjectId(userId),
-      startTime: body.startTime as number,
-      endTime: body.endTime as number,
-      customRatings: body.customRatings as Training['customRatings'],
+      startTime: body.startTime,
+      endTime: body.endTime,
+      customRatings: body.customRatings,
       problems,
       performance: 0,
-      trainingMode: (body.trainingMode as TrainingMode) ?? 'ladder',
-      level: (body.level as string) ?? '',
+      trainingMode: body.trainingMode ?? 'ladder',
+      level: body.level ?? '',
       durationMinutes: Number(body.durationMinutes ?? 120),
       status: 'active',
       solvedCount: 0,
       reviewGenerated: false,
       showRatings: body.showRatings !== false,
-      tagsFilter: (body.tags as string[]) ?? [],
+      tagsFilter: body.tags ?? body.tagsFilter ?? [],
       weaknessFallback: Boolean(body.weaknessFallback),
     });
 

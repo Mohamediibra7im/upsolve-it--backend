@@ -112,7 +112,10 @@ export class AuthController {
 
   @Post('reset-pin')
   @UseGuards(OptionalAuthGuard)
-  async resetPin(@CurrentUser() user: UserDocument | null, @Body() dto: ResetPinDto) {
+  async resetPin(
+    @CurrentUser() user: UserDocument | null,
+    @Body() dto: ResetPinDto,
+  ) {
     return await this.auth.resetPin(user?._id?.toString(), {
       resetToken: dto.resetToken,
       newPassword: dto.newPassword,

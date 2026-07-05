@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -7,12 +6,18 @@ import {
   Put,
   Body,
   UseGuards,
+  ParseArrayPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { UserDocument } from '../auth/schemas/user.schema';
 import { UpsolveService } from './upsolve.service';
 import { UserStatsService } from '../user-stats/user-stats.service';
+import {
+  CreateUpsolveProblemDto,
+  UpdateUpsolveProblemDto,
+  DeleteUpsolveProblemDto,
+} from './dto/upsolve-problem.dto';
 
 @Controller('upsolve')
 export class UpsolveController {
@@ -40,7 +45,11 @@ export class UpsolveController {
 
   @UseGuards(AuthGuard)
   @Post()
-  async add(@CurrentUser() user: UserDocument, @Body() problems: any[]) {
+  async add(
+    @CurrentUser() user: UserDocument,
+    @Body(new ParseArrayPipe({ items: CreateUpsolveProblemDto }))
+    problems: CreateUpsolveProblemDto[],
+  ) {
     try {
       await this.upsolve.insertMany(user._id.toString(), problems);
       return { message: 'Upsolved problems added' };
@@ -61,10 +70,11 @@ export class UpsolveController {
 
   @UseGuards(AuthGuard)
   @Put()
-  async update(@CurrentUser() user: UserDocument, @Body() problems: any[]) {
-    if (!Array.isArray(problems) || problems.length === 0) {
-      throw new BadRequestException('Invalid request body');
-    }
+  async update(
+    @CurrentUser() user: UserDocument,
+    @Body(new ParseArrayPipe({ items: UpdateUpsolveProblemDto }))
+    problems: UpdateUpsolveProblemDto[],
+  ) {
     await this.upsolve.bulkUpdateSolvedTime(user._id.toString(), problems);
     if (problems.some((p: { solvedTime?: number | null }) => p.solvedTime)) {
       await this.userStats.recordUpsolveSolved(user._id.toString());
@@ -76,11 +86,8 @@ export class UpsolveController {
   @Delete()
   async remove(
     @CurrentUser() user: UserDocument,
-    @Body() body: { contestId?: number; index?: string },
+    @Body() body: DeleteUpsolveProblemDto,
   ) {
-    if (!body?.contestId || !body?.index) {
-      throw new BadRequestException('Missing contestId or index');
-    }
     await this.upsolve.deleteOne(
       user._id.toString(),
       body.contestId,

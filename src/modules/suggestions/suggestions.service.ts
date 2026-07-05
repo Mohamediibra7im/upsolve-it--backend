@@ -6,21 +6,70 @@ import {
   type SuggestionDocument,
 } from './schemas/suggestion.schema';
 
-export interface CreateSuggestionDto {
-  title: string;
-  description: string;
-  url: string;
+import {
+  IsBoolean,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CreateSuggestionDto {
+  @IsString()
+  @IsNotEmpty()
+  title!: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  url!: string;
+
+  @IsOptional()
+  @IsString()
   category?: string;
+
+  @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
   order?: number;
 }
 
-export interface UpdateSuggestionDto {
+export class UpdateSuggestionDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
   title?: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
   url?: string;
+
+  @IsOptional()
+  @IsString()
   category?: string;
+
+  @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
   order?: number;
 }
 

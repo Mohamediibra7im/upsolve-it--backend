@@ -3,6 +3,7 @@ import {
   HttpException,
   Injectable,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { JwtService } from '@nestjs/jwt';
@@ -46,6 +47,10 @@ const loginUserLimiter = new RateLimiterMemory({
   blockDuration: 900,
 });
 
+const VERIFICATION_CONTEST_ID = 4;
+const VERIFICATION_PROBLEM_INDEX = 'A';
+const VERIFICATION_TIME_WINDOW_SECONDS = 30;
+
 function generateRefreshToken(): string {
   return crypto.randomBytes(64).toString('hex');
 }
@@ -72,6 +77,8 @@ function toPublicUser(user: any) {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(RefreshToken.name)
@@ -271,13 +278,15 @@ export class AuthService {
       submissionsRes = await fetch(submissionsUrl, {
         signal: AbortSignal.timeout(8000),
       });
-    } catch {
+    } catch (error) {
+      this.logger.error(`Failed to reach Codeforces API for handle ${handle}:`, error);
       throw new BadRequestException(
         'Unable to reach Codeforces API. Please try again later.',
       );
     }
     const submissionsData = await submissionsRes.json();
     if (submissionsData?.status !== 'OK') {
+      this.logger.warn(`Codeforces API returned non-OK status for handle ${handle}: ${JSON.stringify(submissionsData)}`);
       throw new BadRequestException(
         'Codeforces API is currently unavailable. Please try again.',
       );
@@ -286,16 +295,16 @@ export class AuthService {
     const submissions = submissionsData.result ?? [];
     const recentCompilationError = submissions.find(
       (sub: any) =>
-        sub?.problem?.contestId === 4 &&
-        sub?.problem?.index === 'A' &&
+        sub?.problem?.contestId === VERIFICATION_CONTEST_ID &&
+        sub?.problem?.index === VERIFICATION_PROBLEM_INDEX &&
         sub?.verdict === 'COMPILATION_ERROR' &&
         typeof sub?.creationTimeSeconds === 'number' &&
-        sub.creationTimeSeconds >= iat - 30,
+        sub.creationTimeSeconds >= iat - VERIFICATION_TIME_WINDOW_SECONDS,
     );
 
     if (!recentCompilationError) {
       throw new BadRequestException(
-        'Verification failed. No recent compilation error found for problem 4A.',
+        `Verification failed. No recent compilation error found for problem ${VERIFICATION_CONTEST_ID}${VERIFICATION_PROBLEM_INDEX}.`,
       );
     }
 
@@ -342,7 +351,7 @@ export class AuthService {
 
       await this.refreshTokenModel.updateMany(
         { userId: new Types.ObjectId(decoded.userId), revoked: false },
-        { $set: { revoked: true, revokedAt: new Date() } }
+        { $set: { revoked: true, revokedAt: new Date() } },
       );
 
       return { message: 'Password has been reset successfully.' };
@@ -377,7 +386,7 @@ export class AuthService {
 
     await this.refreshTokenModel.updateMany(
       { userId: new Types.ObjectId(userId), revoked: false },
-      { $set: { revoked: true, revokedAt: new Date() } }
+      { $set: { revoked: true, revokedAt: new Date() } },
     );
 
     return { message: 'Password reset successfully.' };

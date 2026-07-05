@@ -4,11 +4,7 @@ import { HydratedDocument, Types } from 'mongoose';
 export type TrainingDocument = HydratedDocument<Training>;
 
 export type TrainingMode =
-  | 'ladder'
-  | 'weakness'
-  | 'speed'
-  | 'contest'
-  | 'endurance';
+  'ladder' | 'weakness' | 'speed' | 'contest' | 'endurance';
 
 export type TrainingStatus = 'active' | 'completed' | 'abandoned';
 

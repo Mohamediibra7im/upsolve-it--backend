@@ -6,17 +6,43 @@ import {
   type WhatsNewEntryDocument,
 } from './schemas/whats-new-entry.schema';
 
-export interface CreateWhatsNewDto {
-  title: string;
-  content: string;
+import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+
+export class CreateWhatsNewDto {
+  @IsString()
+  @IsNotEmpty()
+  title!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  content!: string;
+
+  @IsOptional()
+  @IsString()
   version?: string;
+
+  @IsOptional()
+  @IsBoolean()
   isPublished?: boolean;
 }
 
-export interface UpdateWhatsNewDto {
+export class UpdateWhatsNewDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
   title?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
   content?: string;
+
+  @IsOptional()
+  @IsString()
   version?: string;
+
+  @IsOptional()
+  @IsBoolean()
   isPublished?: boolean;
 }
 
