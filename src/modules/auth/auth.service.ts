@@ -25,6 +25,7 @@ import { Types } from 'mongoose';
 import { getRankFromRating } from '../../common/utils/rating';
 import { shouldSyncProfile } from '../../common/utils/profile';
 import { validatePassword } from '../../common/utils/password';
+import { fetchCodeforcesUserInfo } from '../../common/utils/codeforces-api';
 
 const loginLimiter = new RateLimiterMemory({
   points: 5,
@@ -51,6 +52,22 @@ function generateRefreshToken(): string {
 
 function hashRefreshToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function toPublicUser(user: any) {
+  return {
+    _id: user._id,
+    codeforcesHandle: user.codeforcesHandle,
+    rating: user.rating,
+    avatar: user.avatar,
+    rank: user.rank,
+    maxRating: user.maxRating,
+    maxRank: user.maxRank,
+    organization: user.organization,
+    lastSyncTime: user.lastSyncTime,
+    role: user.role,
+    isVerified: user.isVerified,
+  };
 }
 
 @Injectable()
@@ -128,29 +145,11 @@ export class AuthService {
     });
     if (existing) throw new BadRequestException('Handle already exists');
 
-    let data: any;
-    try {
-      const res = await fetch(
-        `https://codeforces.com/api/user.info?handles=${encodeURIComponent(codeforcesHandle)}`,
-        { signal: AbortSignal.timeout(8000) },
-      );
-      data = await res.json();
-    } catch {
-      throw new BadRequestException(
-        'Unable to reach Codeforces API. Please try again later.',
-      );
+    const results = await fetchCodeforcesUserInfo(codeforcesHandle);
+    if (!results || results.length === 0) {
+      throw new BadRequestException('Invalid Codeforces handle');
     }
-
-    if (data?.status !== 'OK' || !data.result?.[0]) {
-      const comment = data?.comment ?? '';
-      if (comment.includes('not found') || comment.includes('handle')) {
-        throw new BadRequestException('Invalid Codeforces handle');
-      }
-      throw new BadRequestException(
-        'Codeforces API is currently unavailable. Please try again later.',
-      );
-    }
-    const cfUser = data.result[0];
+    const cfUser = results[0];
     const rating: number = Number(cfUser.rating) || 0;
     const rank = cfUser.rank ?? getRankFromRating(rating);
 
@@ -308,12 +307,14 @@ export class AuthService {
     return { success: true, resetToken };
   }
 
-  async resetPin(body: {
-    resetToken?: string;
-    newPassword?: string;
-    accessToken?: string;
-    oldPassword?: string;
-  }) {
+  async resetPin(
+    userId: string | undefined,
+    body: {
+      resetToken?: string;
+      newPassword?: string;
+      oldPassword?: string;
+    },
+  ) {
     // Forgot password flow
     if (body.resetToken) {
       if (!body.newPassword) {
@@ -339,15 +340,16 @@ export class AuthService {
         password: hashedNewPassword,
       });
 
+      await this.refreshTokenModel.updateMany(
+        { userId: new Types.ObjectId(decoded.userId), revoked: false },
+        { $set: { revoked: true, revokedAt: new Date() } }
+      );
+
       return { message: 'Password has been reset successfully.' };
     }
 
     // Logged-in flow
-    const token = body.accessToken;
-    if (!token) throw new UnauthorizedException('Unauthorized');
-
-    const decoded = await this.verifyAccessToken(token);
-    if (!decoded) throw new UnauthorizedException('Invalid token');
+    if (!userId) throw new UnauthorizedException('Unauthorized');
 
     if (!body.oldPassword || !body.newPassword) {
       throw new BadRequestException(
@@ -360,7 +362,7 @@ export class AuthService {
       throw new BadRequestException(passwordValidation.errors.join('. '));
     }
 
-    const user = await this.userModel.findById(decoded.userId);
+    const user = await this.userModel.findById(userId);
     if (!user) throw new BadRequestException('User not found');
 
     const isMatch = await bcrypt.compare(body.oldPassword, user.password);
@@ -369,59 +371,31 @@ export class AuthService {
     }
 
     const hashedNewPassword = await bcrypt.hash(body.newPassword, 10);
-    await this.userModel.findByIdAndUpdate(decoded.userId, {
+    await this.userModel.findByIdAndUpdate(userId, {
       password: hashedNewPassword,
     });
+
+    await this.refreshTokenModel.updateMany(
+      { userId: new Types.ObjectId(userId), revoked: false },
+      { $set: { revoked: true, revokedAt: new Date() } }
+    );
 
     return { message: 'Password reset successfully.' };
   }
 
-  async syncProfile(accessToken: string) {
-    const decoded = await this.verifyAccessToken(accessToken);
-    if (!decoded) throw new UnauthorizedException('Invalid token');
-
-    const user = await this.userModel.findById(decoded.userId);
-    if (!user) throw new BadRequestException('User not found');
-
+  async syncProfile(user: UserDocument) {
     if (!shouldSyncProfile(user.lastSyncTime)) {
       return {
         message: 'Profile is up to date',
-        user: {
-          _id: user._id,
-          codeforcesHandle: user.codeforcesHandle,
-          rating: user.rating,
-          avatar: user.avatar,
-          rank: user.rank,
-          maxRating: user.maxRating,
-          maxRank: user.maxRank,
-          organization: user.organization,
-          lastSyncTime: user.lastSyncTime,
-          role: user.role,
-          isVerified: user.isVerified,
-        },
+        user: toPublicUser(user),
       };
     }
 
-    let data: any;
-    try {
-      const res = await fetch(
-        `https://codeforces.com/api/user.info?handles=${encodeURIComponent(
-          user.codeforcesHandle,
-        )}`,
-        { signal: AbortSignal.timeout(8000) },
-      );
-      data = await res.json();
-    } catch {
-      throw new BadRequestException(
-        'Unable to reach Codeforces API. Please try again later.',
-      );
+    const results = await fetchCodeforcesUserInfo(user.codeforcesHandle);
+    if (!results || results.length === 0) {
+      throw new BadRequestException('Invalid Codeforces handle');
     }
-    if (data?.status !== 'OK' || !data.result?.[0]) {
-      throw new BadRequestException(
-        'Codeforces API is currently unavailable. Please try again later.',
-      );
-    }
-    const cfUser = data.result[0];
+    const cfUser = results[0];
 
     const currentRating: number = Number(cfUser.rating) || 0;
     const currentRank = cfUser.rank ?? getRankFromRating(currentRating);
@@ -429,7 +403,7 @@ export class AuthService {
     const maxRank = cfUser.maxRank ?? getRankFromRating(maxRating);
 
     const updatedUser = await this.userModel.findByIdAndUpdate(
-      decoded.userId,
+      user._id,
       {
         rating: currentRating,
         rank: currentRank,
@@ -444,19 +418,7 @@ export class AuthService {
 
     return {
       message: 'Profile synced successfully',
-      user: {
-        _id: updatedUser!._id,
-        codeforcesHandle: updatedUser!.codeforcesHandle,
-        rating: updatedUser!.rating,
-        avatar: updatedUser!.avatar,
-        rank: updatedUser!.rank,
-        maxRating: updatedUser!.maxRating,
-        maxRank: updatedUser!.maxRank,
-        organization: updatedUser!.organization,
-        lastSyncTime: updatedUser!.lastSyncTime,
-        role: updatedUser!.role,
-        isVerified: updatedUser!.isVerified,
-      },
+      user: toPublicUser(updatedUser),
     };
   }
 
@@ -479,19 +441,7 @@ export class AuthService {
     });
 
     return {
-      user: {
-        _id: user._id,
-        codeforcesHandle: user.codeforcesHandle,
-        rating: user.rating,
-        avatar: user.avatar,
-        rank: user.rank,
-        maxRating: user.maxRating,
-        maxRank: user.maxRank,
-        organization: user.organization,
-        lastSyncTime: user.lastSyncTime,
-        role: user.role,
-        isVerified: user.isVerified,
-      },
+      user: toPublicUser(user),
       token: accessToken,
       refreshToken: refreshTokenValue,
     };
@@ -543,32 +493,17 @@ export class AuthService {
 
     const accessToken = await this.jwt.signAsync({ userId: user._id });
     return {
-      user: {
-        _id: user._id,
-        codeforcesHandle: user.codeforcesHandle,
-        rating: user.rating,
-        avatar: user.avatar,
-        rank: user.rank,
-        maxRating: user.maxRating,
-        maxRank: user.maxRank,
-        organization: user.organization,
-        lastSyncTime: user.lastSyncTime,
-        role: user.role,
-        isVerified: user.isVerified,
-      },
+      user: toPublicUser(user),
       token: accessToken,
       refreshToken: newRefreshTokenValue,
     };
   }
 
-  async generateVerificationCode(accessToken: string) {
-    const decoded = await this.verifyAccessToken(accessToken);
-    if (!decoded) throw new UnauthorizedException('Invalid token');
-
+  async generateVerificationCode(userId: string) {
     const code = crypto.randomBytes(4).toString('hex');
     const expiresAt = Date.now() + 60 * 1000; // 1 minute
 
-    await this.userModel.findByIdAndUpdate(decoded.userId, {
+    await this.userModel.findByIdAndUpdate(userId, {
       verificationCode: code,
       verificationCodeExpiry: expiresAt,
     });
@@ -576,11 +511,8 @@ export class AuthService {
     return { code, expiresAt };
   }
 
-  async verifyCodeforcesProfile(accessToken: string) {
-    const decoded = await this.verifyAccessToken(accessToken);
-    if (!decoded) throw new UnauthorizedException('Invalid token');
-
-    const user = await this.userModel.findById(decoded.userId);
+  async verifyCodeforcesProfile(userId: string) {
+    const user = await this.userModel.findById(userId);
     if (!user) throw new BadRequestException('User not found');
 
     if (user.isVerified) {
@@ -610,24 +542,11 @@ export class AuthService {
     let firstName = '';
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      let res: Response;
-      try {
-        res = await fetch(
-          `https://codeforces.com/api/user.info?handles=${encodeURIComponent(user.codeforcesHandle)}`,
-          { signal: AbortSignal.timeout(8000) },
-        );
-      } catch {
-        throw new BadRequestException(
-          'Unable to reach Codeforces API. Please try again later.',
-        );
+      const results = await fetchCodeforcesUserInfo(user.codeforcesHandle);
+      if (!results || results.length === 0) {
+        throw new BadRequestException('Invalid Codeforces handle');
       }
-      const data = await res.json();
-      if (data?.status !== 'OK' || !data.result?.[0]) {
-        throw new BadRequestException(
-          'Codeforces API is currently unavailable. Please try again.',
-        );
-      }
-      firstName = (data.result[0].firstName ?? '').trim();
+      firstName = (results[0].firstName ?? '').trim();
       if (firstName === user.verificationCode) break;
       if (attempt < MAX_ATTEMPTS - 1) {
         await new Promise((r) => setTimeout(r, RETRY_DELAY));
@@ -640,7 +559,7 @@ export class AuthService {
       );
     }
 
-    await this.userModel.findByIdAndUpdate(decoded.userId, {
+    await this.userModel.findByIdAndUpdate(userId, {
       isVerified: true,
       verificationCode: null,
       verificationCodeExpiry: null,
@@ -648,17 +567,17 @@ export class AuthService {
 
     // Award 50 XP for verification
     const VERIFICATION_XP = 50;
-    const userId = new Types.ObjectId(decoded.userId);
+    const userObjectId = new Types.ObjectId(userId);
     try {
       await this.xpTransactionModel.create({
-        userId,
+        userId: userObjectId,
         amount: VERIFICATION_XP,
         reason: 'Codeforces profile verification',
         sourceType: 'verification',
-        sourceId: userId,
+        sourceId: userObjectId,
       });
       await this.xpModel.findOneAndUpdate(
-        { userId },
+        { userId: userObjectId },
         { $inc: { totalXp: VERIFICATION_XP } },
         { upsert: true },
       );

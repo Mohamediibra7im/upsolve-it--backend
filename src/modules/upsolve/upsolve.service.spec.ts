@@ -29,13 +29,13 @@ describe('UpsolveService', () => {
   let upsolveModel: ReturnType<typeof createModel>;
   let dismissedModel: ReturnType<typeof createModel>;
   let userModel: ReturnType<typeof createModel>;
-  let authService: { getUserFromAuthHeader: jest.Mock };
+  let authService: any;
 
   beforeEach(async () => {
     upsolveModel = createModel();
     dismissedModel = createModel();
     userModel = createModel();
-    authService = { getUserFromAuthHeader: jest.fn() };
+    authService = {};
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [

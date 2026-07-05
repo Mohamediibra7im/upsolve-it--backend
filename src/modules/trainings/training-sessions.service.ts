@@ -20,19 +20,7 @@ import { UserStatsService } from '../user-stats/user-stats.service';
 import { UpsolveService } from '../upsolve/upsolve.service';
 import { topWeakTags, type TagAgg } from './utils/weakness';
 import { isProblemMarkedSolved } from './utils/problem-solved';
-
-function makeProblemId(c: number, i: string): string {
-  return `${c}_${i}`;
-}
-
-function ensureProblemIds(
-  problems: TrainingProblemStored[],
-): TrainingProblemStored[] {
-  return (problems ?? []).map((p) => ({
-    ...p,
-    problemId: p.problemId || makeProblemId(p.contestId, p.index),
-  }));
-}
+import { ensureProblemIds, makeProblemId } from './utils/problem-ids';
 
 @Injectable()
 export class TrainingSessionsService {

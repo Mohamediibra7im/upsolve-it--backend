@@ -10,13 +10,7 @@ import {
 } from './schemas/training.schema';
 import { isProblemMarkedSolved } from './utils/problem-solved';
 import { UserStatsService } from '../user-stats/user-stats.service';
-
-function ensureProblemIds(problems: unknown[] | undefined) {
-  return (problems ?? []).map((p: any) => ({
-    ...p,
-    problemId: p.problemId ?? `${p.contestId}_${p.index}`,
-  }));
-}
+import { ensureProblemIds } from './utils/problem-ids';
 
 @Injectable()
 export class TrainingsService {
@@ -28,15 +22,12 @@ export class TrainingsService {
     private readonly trainingModel: Model<TrainingDocument>,
   ) {}
 
-  async getUserFromAuthHeader(authHeader?: string, accessTokenCookie?: string) {
-    return this.auth.getUserFromAuthHeader(authHeader, accessTokenCookie);
-  }
 
   async createTraining(userId: string, body: Record<string, any>) {
     const rest = { ...body };
     delete rest._id;
     delete rest.user;
-    const problems = ensureProblemIds(rest.problems as unknown[]);
+    const problems = ensureProblemIds(rest.problems as any[]);
     const solvedCount =
       rest.solvedCount ??
       problems.filter((p) => isProblemMarkedSolved(p as TrainingProblemStored))

@@ -31,7 +31,7 @@ describe('TrainingsService', () => {
   let trainingModel: ReturnType<typeof createModel>;
   let userModel: ReturnType<typeof createModel>;
   let userStats: Record<string, jest.Mock>;
-  let authService: Record<string, jest.Mock>;
+  let authService: any;
 
   beforeEach(async () => {
     trainingModel = createModel();
@@ -39,7 +39,7 @@ describe('TrainingsService', () => {
     userStats = {
       recordTrainingCompleted: jest.fn().mockResolvedValue(undefined),
     };
-    authService = { getUserFromAuthHeader: jest.fn() };
+    authService = {};
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [

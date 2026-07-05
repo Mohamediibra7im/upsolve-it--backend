@@ -166,6 +166,7 @@ export class ContactService {
 
     const escReplyName = esc(msg.name);
     const escReplyMessage = esc(msg.message);
+    const escReplyBody = esc(replyBody);
 
     await transporter.sendMail({
       from: `"Upsolve.it Support" <${smtpEmail}>`,
@@ -175,7 +176,7 @@ export class ContactService {
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; padding: 40px; border-radius: 24px; background-color: #ffffff; color: #0f172a;">
           <h2 style="font-size: 20px; font-weight: 800; text-transform: uppercase; color: #007F5F; margin: 0 0 16px 0;">Reply from Upsolve.it</h2>
           <p style="font-size: 15px; line-height: 1.6; color: #334155;">Hello <strong>${escReplyName}</strong>,</p>
-          <div style="font-size: 15px; line-height: 1.6; color: #334155; white-space: pre-wrap; margin: 16px 0;">${replyBody}</div>
+          <div style="font-size: 15px; line-height: 1.6; color: #334155; white-space: pre-wrap; margin: 16px 0;">${escReplyBody}</div>
           <div style="border-top: 1px solid #f1f5f9; padding-top: 24px; margin-top: 32px;">
             <p style="font-size: 12px; color: #94a3b8;">Your original message:</p>
             <div style="background-color: #f8fafc; padding: 16px; border-radius: 12px; margin-top: 8px; border: 1px solid #f1f5f9;">

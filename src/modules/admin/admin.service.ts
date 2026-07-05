@@ -34,6 +34,7 @@ import {
   type UserTopicProgressDocument,
 } from '../roadmap/schemas/user-topic-progress.schema';
 import { getRankFromRating } from '../../common/utils/rating';
+import { fetchCodeforcesUserInfo } from '../../common/utils/codeforces-api';
 
 @Injectable()
 export class AdminService {
@@ -55,16 +56,6 @@ export class AdminService {
     private readonly auditLogs: AuditLogsService,
   ) {}
 
-  async requireAdmin(authHeader?: string, accessTokenCookie?: string) {
-    const token = authHeader?.replace('Bearer ', '') ?? accessTokenCookie ?? '';
-    const decoded = token ? await this.auth.verifyAccessToken(token) : null;
-    if (!decoded) throw new UnauthorizedException('Unauthorized');
-    const currentUser = await this.userModel.findById(decoded.userId);
-    if (currentUser?.role !== 'admin') {
-      throw new ForbiddenException('Admin access required');
-    }
-    return currentUser;
-  }
 
   async stats() {
     const { thirtyDaysAgo, trendStart, trendStartMs } =
@@ -669,26 +660,11 @@ export class AdminService {
     const user = await this.userModel.findById(uid);
     if (!user) throw new NotFoundException('User not found');
 
-    let data: any;
-    try {
-      const res = await fetch(
-        `https://codeforces.com/api/user.info?handles=${encodeURIComponent(
-          user.codeforcesHandle,
-        )}`,
-        { signal: AbortSignal.timeout(8000) },
-      );
-      data = await res.json();
-    } catch {
-      throw new BadRequestException(
-        'Unable to reach Codeforces API. Please try again later.',
-      );
+    const results = await fetchCodeforcesUserInfo(user.codeforcesHandle);
+    if (!results || results.length === 0) {
+      throw new BadRequestException('Invalid Codeforces handle');
     }
-    if (data?.status !== 'OK' || !data.result?.[0]) {
-      throw new BadRequestException(
-        'Codeforces API is currently unavailable. Please try again later.',
-      );
-    }
-    const cfUser = data.result[0];
+    const cfUser = results[0];
 
     const currentRating = Number(cfUser.rating ?? 0);
     const currentRank = cfUser.rank ?? getRankFromRating(currentRating);
@@ -746,27 +722,14 @@ export class AdminService {
 
     // Build handles list and fetch from Codeforces in one call
     const handles = users.map((u) => u.codeforcesHandle).join(';');
-    let data: any;
-    try {
-      const res = await fetch(
-        `https://codeforces.com/api/user.info?handles=${encodeURIComponent(handles)}`,
-        { signal: AbortSignal.timeout(8000) },
-      );
-      data = await res.json();
-    } catch {
-      throw new BadRequestException(
-        'Unable to reach Codeforces API. Please try again later.',
-      );
-    }
-    if (data?.status !== 'OK' || !data.result?.length) {
-      throw new BadRequestException(
-        'Codeforces API is currently unavailable. Please try again later.',
-      );
+    const results = await fetchCodeforcesUserInfo(handles);
+    if (!results || results.length === 0) {
+      throw new BadRequestException('Codeforces API returned no users');
     }
 
     // Map CF results by handle (lowercase) for easy lookup
     const cfMap = new Map<string, any>();
-    for (const cfUser of data.result) {
+    for (const cfUser of results) {
       cfMap.set((cfUser.handle as string).toLowerCase(), cfUser);
     }
 

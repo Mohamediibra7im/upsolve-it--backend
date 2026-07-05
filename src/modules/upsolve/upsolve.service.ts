@@ -23,9 +23,6 @@ export class UpsolveService {
     private readonly dismissedModel: Model<DismissedUpsolveDocument>,
   ) {}
 
-  async getUserFromAuthHeader(authHeader?: string, accessTokenCookie?: string) {
-    return this.auth.getUserFromAuthHeader(authHeader, accessTokenCookie);
-  }
 
   async list(userId: string) {
     return await this.upsolveModel

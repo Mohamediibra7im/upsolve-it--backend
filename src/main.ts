@@ -31,7 +31,7 @@ async function bootstrap() {
           'frame-ancestors': ["'self'"],
           'img-src': ["'self'", 'data:', 'https:'],
           'object-src': ["'none'"],
-          'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          'script-src': ["'self'", "'unsafe-inline'"],
           'script-src-attr': ["'unsafe-inline'"],
           'style-src': ["'self'", 'https:', "'unsafe-inline'"],
           'upgrade-insecure-requests': [],

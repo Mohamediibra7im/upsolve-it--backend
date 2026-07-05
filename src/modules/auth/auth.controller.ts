@@ -6,6 +6,7 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -15,6 +16,10 @@ import { RegisterDto } from './dto/register.dto';
 import { InitiateResetDto } from './dto/initiate-reset.dto';
 import { VerifySubmissionDto } from './dto/verify-submission.dto';
 import { ResetPinDto } from './dto/reset-pin.dto';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { UserDocument } from './schemas/user.schema';
 
 @Controller('auth')
 export class AuthController {
@@ -106,43 +111,31 @@ export class AuthController {
   }
 
   @Post('reset-pin')
-  async resetPin(@Req() req: Request, @Body() dto: ResetPinDto) {
-    const accessToken =
-      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
-      req.cookies?.accessToken;
-    return await this.auth.resetPin({
+  @UseGuards(OptionalAuthGuard)
+  async resetPin(@CurrentUser() user: UserDocument | null, @Body() dto: ResetPinDto) {
+    return await this.auth.resetPin(user?._id?.toString(), {
       resetToken: dto.resetToken,
       newPassword: dto.newPassword,
       oldPassword: dto.oldPassword,
-      accessToken,
     });
   }
 
   @Post('sync-profile')
-  async syncProfile(@Req() req: Request) {
-    const token =
-      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
-      req.cookies?.accessToken;
-    if (!token) throw new UnauthorizedException('Unauthorized');
-    return await this.auth.syncProfile(token);
+  @UseGuards(AuthGuard)
+  async syncProfile(@CurrentUser() user: UserDocument) {
+    return await this.auth.syncProfile(user);
   }
 
   @Post('generate-verification-code')
-  async generateVerificationCode(@Req() req: Request) {
-    const token =
-      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
-      req.cookies?.accessToken;
-    if (!token) throw new UnauthorizedException('Unauthorized');
-    return await this.auth.generateVerificationCode(token);
+  @UseGuards(AuthGuard)
+  async generateVerificationCode(@CurrentUser() user: UserDocument) {
+    return await this.auth.generateVerificationCode(user._id.toString());
   }
 
   @Post('verify-codeforces-profile')
-  async verifyCodeforcesProfile(@Req() req: Request) {
-    const token =
-      req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
-      req.cookies?.accessToken;
-    if (!token) throw new UnauthorizedException('Unauthorized');
-    return await this.auth.verifyCodeforcesProfile(token);
+  @UseGuards(AuthGuard)
+  async verifyCodeforcesProfile(@CurrentUser() user: UserDocument) {
+    return await this.auth.verifyCodeforcesProfile(user._id.toString());
   }
 
   private setRefreshCookie(res: Response, refreshTokenValue: string) {
