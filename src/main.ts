@@ -97,8 +97,9 @@ async function bootstrap() {
     });
   }
 
-  await app.listen(port);
-  logger.log(`Application is running on: http://localhost:${port}`);
+  // ponytail: 0.0.0.0 required for Fly.io/Docker — proxy connects from outside
+  await app.listen(port, '0.0.0.0');
+  logger.log(`Application is running on: http://0.0.0.0:${port}`);
 }
 
 bootstrap().catch((err) => {
