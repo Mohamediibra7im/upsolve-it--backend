@@ -36,10 +36,10 @@ export class AdminController {
   @UseGuards(AuthGuard, AdminGuard)
   @Get('users')
   async users(@Query('page') page?: string, @Query('limit') limit?: string) {
-    // ponytail: || treats limit=0 as falsy, use ternary to preserve explicit 0
+    // ponytail: return all by default (client-side pagination handles display), cap at 5000
     return await this.admin.listUsers(
       page ? Number(page) : 1,
-      Math.min(Number(limit) || 50, 500),
+      Math.min(Number(limit) || 0, 5000),
     );
   }
 
