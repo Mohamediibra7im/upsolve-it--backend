@@ -1049,24 +1049,26 @@ export class RoadmapProgressService {
     const page = Math.max(parseInt(query.page ?? '1', 10) || 1, 1);
     const skip = (page - 1) * pageSize;
 
-    // Total count for pagination metadata
-    const total = await this.xpModel.countDocuments({});
+    // Run count, top3, paginated entries, and user's own XP in parallel
+    const [total, top3Docs, xpDocs, userXp] = await Promise.all([
+      this.xpModel.countDocuments({}),
+      this.xpModel
+        .find({})
+        .sort({ totalXp: -1 })
+        .limit(3)
+        .lean(),
+      this.xpModel
+        .find({})
+        .sort({ totalXp: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .lean(),
+      userId
+        ? this.xpModel.findOne({ userId }).select('totalXp').lean()
+        : Promise.resolve(null),
+    ]);
+
     const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
-
-    // Top 3 always fetched for podium, regardless of current page
-    const top3Docs = await this.xpModel
-      .find({})
-      .sort({ totalXp: -1 })
-      .limit(3)
-      .lean();
-
-    // Paginated entries for current page
-    const xpDocs = await this.xpModel
-      .find({})
-      .sort({ totalXp: -1 })
-      .skip(skip)
-      .limit(pageSize)
-      .lean();
 
     if (total === 0) {
       return {
@@ -1088,7 +1090,8 @@ export class RoadmapProgressService {
       ]),
     ];
 
-    const [users, topicCounts, problemCounts] = await Promise.all([
+    // Run user lookups, aggregations, and rank calculation in parallel
+    const [users, topicCounts, problemCounts, higherCount] = await Promise.all([
       this.userModel
         .find({ _id: { $in: allUserIds } })
         .select('codeforcesHandle avatar')
@@ -1101,6 +1104,9 @@ export class RoadmapProgressService {
         { $match: { userId: { $in: allUserIds }, isSolved: true } },
         { $group: { _id: '$userId', count: { $sum: 1 } } },
       ]),
+      userXp
+        ? this.xpModel.countDocuments({ totalXp: { $gt: userXp.totalXp } })
+        : Promise.resolve(null),
     ]);
 
     const userMap = new Map(users.map((u) => [String(u._id), u]));
@@ -1148,19 +1154,7 @@ export class RoadmapProgressService {
     }
 
     // Calculate current user's rank
-    let myRank: number | null = null;
-    if (userId) {
-      const userXp = await this.xpModel
-        .findOne({ userId })
-        .select('totalXp')
-        .lean();
-      if (userXp) {
-        const higherCount = await this.xpModel.countDocuments({
-          totalXp: { $gt: userXp.totalXp },
-        });
-        myRank = higherCount + 1;
-      }
-    }
+    const myRank = higherCount !== null ? higherCount + 1 : null;
 
     return { leaderboard, top3, total, page, pageSize, totalPages, myRank };
   }
