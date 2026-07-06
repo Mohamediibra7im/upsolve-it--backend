@@ -1,5 +1,6 @@
 import type { TrainingProblemStored } from '../schemas/training.schema';
 import { isProblemMarkedSolved } from './problem-solved';
+import { expectedTimeSecondsFromRating } from './expected-time';
 
 const RATING_KEYS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'] as const;
 
@@ -11,12 +12,14 @@ function getExpectedSolveProb(
   return 1 / (1 + Math.pow(10, ratingDiff / 400));
 }
 
-function getTimeFactor(solveTime: number, contestDuration: number): number {
-  if (solveTime <= 0) return 1;
-  const timeRatio = solveTime / contestDuration;
-  if (timeRatio <= 0.1) return 1.03;
-  if (timeRatio <= 0.4) return 1.01;
-  if (timeRatio <= 0.8) return 1.0;
+function getTimeFactor(solveTimeMinutes: number, problemRating: number): number {
+  if (solveTimeMinutes <= 0) return 1;
+  const expectedSeconds = expectedTimeSecondsFromRating(problemRating);
+  const expectedMinutes = expectedSeconds / 60;
+  const timeRatio = solveTimeMinutes / expectedMinutes;
+  if (timeRatio <= 0.5) return 1.03;
+  if (timeRatio <= 0.8) return 1.01;
+  if (timeRatio <= 1.2) return 1.0;
   return 0.97;
 }
 
@@ -27,10 +30,10 @@ function solvePerformanceToRating(
   timeFactor: number,
 ): number {
   if (actualSolved) {
-    const difficultyBonus = Math.max(0, (1 - expectedProb) * 100);
+    const difficultyBonus = Math.max(0, (1 - expectedProb) * 200);
     return (problemRating + difficultyBonus) * timeFactor;
   }
-  const difficultyPenalty = expectedProb * 100;
+  const difficultyPenalty = expectedProb * 200;
   return (problemRating - difficultyPenalty) * timeFactor;
 }
 
@@ -95,7 +98,7 @@ export function computeSessionPerformance(
     const st = solveTimeMinutes(p, input.startTime);
     const expectedProb = getExpectedSolveProb(userRating, rating);
     const timeFactor =
-      solved && st != null ? getTimeFactor(st, contestDuration) : 1;
+      solved && st != null ? getTimeFactor(st, rating) : 1;
     total += solvePerformanceToRating(rating, expectedProb, solved, timeFactor);
     count++;
   }
