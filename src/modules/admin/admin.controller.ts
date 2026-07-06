@@ -39,7 +39,7 @@ export class AdminController {
     // ponytail: || treats limit=0 as falsy, use ternary to preserve explicit 0
     return await this.admin.listUsers(
       page ? Number(page) : 1,
-      limit ? Number(limit) : 50,
+      Math.min(Number(limit) || 50, 500),
     );
   }
 

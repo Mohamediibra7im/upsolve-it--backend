@@ -29,18 +29,12 @@ export class UpsolveController {
   @UseGuards(AuthGuard)
   @Get()
   async list(@CurrentUser() user: UserDocument) {
-    return await this.upsolve.list(user._id.toString());
-  }
-
-  /**
-   * Returns problem identifiers that the user has deliberately deleted
-   * from the upsolve list. The frontend uses this to prevent the
-   * auto-sync logic from re-inserting deleted problems.
-   */
-  @UseGuards(AuthGuard)
-  @Get('dismissed')
-  async listDismissed(@CurrentUser() user: UserDocument) {
-    return await this.upsolve.listDismissed(user._id.toString());
+    const userId = user._id.toString();
+    const [items, dismissed] = await Promise.all([
+      this.upsolve.list(userId),
+      this.upsolve.listDismissed(userId),
+    ]);
+    return { items, dismissed };
   }
 
   @UseGuards(AuthGuard)

@@ -72,7 +72,7 @@ export class RateLimiterGuard implements CanActivate {
         duration: 60 * 60,
         keyPrefix: 'auth:verify-profile',
       },
-      'ContactController.contact': {
+      'ContactController.send': {
         points: 3,
         duration: 60 * 60,
         keyPrefix: 'contact',
@@ -91,6 +91,11 @@ export class RateLimiterGuard implements CanActivate {
         points: 30,
         duration: 60 * 60,
         keyPrefix: 'upsolve:add',
+      },
+      'AuthController.syncProfile': {
+        points: 10,
+        duration: 60 * 15,
+        keyPrefix: 'auth:sync-profile',
       },
     };
 

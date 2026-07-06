@@ -37,6 +37,8 @@ import { fetchCodeforcesUserInfo } from '../../common/utils/codeforces-api';
 
 @Injectable()
 export class AdminService {
+  private statsCache: { data: any; expiresAt: number } | null = null;
+
   constructor(
     private readonly auth: AuthService,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
@@ -56,6 +58,11 @@ export class AdminService {
   ) {}
 
   async stats() {
+    const now = Date.now();
+    if (this.statsCache && this.statsCache.expiresAt > now) {
+      return this.statsCache.data;
+    }
+
     const { thirtyDaysAgo, trendStart, trendStartMs } =
       this.getDateBoundaries();
 
@@ -293,7 +300,7 @@ export class AdminService {
       ...activeUpsolveUsers.map((id) => String(id)),
     ]);
 
-    return {
+    const result = {
       totalUsers,
       adminUsers,
       regularUsers: Math.max(totalUsers - adminUsers, 0),
@@ -333,6 +340,9 @@ export class AdminService {
       trainingModes,
       activityTrend,
     };
+
+    this.statsCache = { data: result, expiresAt: Date.now() + 30_000 };
+    return result;
   }
 
   private getDateBoundaries() {
