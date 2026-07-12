@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import {
   BadRequestException,
   HttpException,
@@ -93,6 +94,16 @@ describe('AuthService', () => {
         },
         { provide: JwtService, useValue: jwtService },
         { provide: AuditLogsService, useValue: auditLogs },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((k: string) =>
+              k === 'JWT_REFRESH_SECRET'
+                ? 'test-refresh-secret-at-least-32-chars-long'
+                : undefined,
+            ),
+          },
+        },
       ],
     }).compile();
 

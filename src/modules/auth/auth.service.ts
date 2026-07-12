@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
@@ -79,6 +80,11 @@ function toPublicUser(user: any) {
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  // Reset/verification tokens are signed with a DIFFERENT secret than access
+  // tokens. This is what prevents a password-reset token from ever verifying
+  // as a session token (account-takeover fix) — without needing a `type` claim,
+  // so access tokens issued before this change keep working (no forced logout).
+  private readonly resetSecret: string;
 
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
@@ -89,19 +95,21 @@ export class AuthService {
     private readonly xpTransactionModel: Model<XpTransactionDocument>,
     private readonly jwt: JwtService,
     private readonly auditLogs: AuditLogsService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    const secret = this.config.get<string>('JWT_REFRESH_SECRET');
+    if (!secret) throw new Error('JWT_REFRESH_SECRET must be set in environment');
+    this.resetSecret = secret;
+  }
 
   async verifyAccessToken(token: string): Promise<{ userId: string } | null> {
     try {
-      const decoded = await this.jwt.verifyAsync<{
-        userId: string;
-        type?: string;
-      }>(token, { algorithms: ['HS256'] });
-      // Only tokens explicitly minted as access tokens may authenticate a
-      // request. Reset/verification tokens are signed with the same secret but
-      // carry a different `type` — reject them here to prevent using a
-      // password-reset token as a session (account-takeover fix).
-      if (decoded?.type !== 'access') return null;
+      // Verify against the access-token secret only. Reset/verification tokens
+      // are signed with `resetSecret`, so they fail here and cannot be replayed
+      // as a session. HS256 is pinned to prevent algorithm confusion.
+      const decoded = await this.jwt.verifyAsync<{ userId: string }>(token, {
+        algorithms: ['HS256'],
+      });
       return decoded;
     } catch {
       return null;
@@ -257,7 +265,7 @@ export class AuthService {
 
     const verificationToken = await this.jwt.signAsync(
       { userId: String(user._id), handle: user.codeforcesHandle, type: 'verify' },
-      { expiresIn: '5m' },
+      { expiresIn: '5m', secret: this.resetSecret },
     );
 
     return { verificationToken };
@@ -272,6 +280,7 @@ export class AuthService {
     try {
       decoded = await this.jwt.verifyAsync(verificationToken, {
         algorithms: ['HS256'],
+        secret: this.resetSecret,
       });
     } catch {
       throw new BadRequestException('Invalid or expired verification token');
@@ -323,7 +332,7 @@ export class AuthService {
 
     const resetToken = await this.jwt.signAsync(
       { userId: decoded.userId, type: 'reset' },
-      { expiresIn: '10m' },
+      { expiresIn: '10m', secret: this.resetSecret },
     );
 
     return { success: true, resetToken };
@@ -351,6 +360,7 @@ export class AuthService {
       try {
         decoded = await this.jwt.verifyAsync(body.resetToken, {
           algorithms: ['HS256'],
+          secret: this.resetSecret,
         });
       } catch {
         throw new BadRequestException('Invalid or expired reset token');

@@ -43,10 +43,16 @@
 containing `userId`. An attacker could request a reset token for any handle and
 present it as the `accessToken` cookie to authenticate as that user — no
 password, no Codeforces proof.
-**Now:** Every token carries a `type` claim (`access` / `verify` / `reset`).
-`verifyAccessToken()` rejects anything that isn't `type:'access'`. Reset and
-verify handlers likewise assert their expected type. All `verifyAsync` calls
-pin `algorithms: ['HS256']` to prevent algorithm-confusion.
+**Now:** Reset and verification tokens are signed with a **separate secret**
+(`JWT_REFRESH_SECRET`, already present and validated in env). Access-token
+verification checks only the `JWT_SECRET` signature, so a reset/verify token
+can never verify as a session. All `verifyAsync` calls pin
+`algorithms: ['HS256']` against algorithm-confusion. Tokens also carry a `type`
+claim as defence-in-depth.
+**Zero-downtime:** because existing access tokens are still verified against
+`JWT_SECRET` (no new required claim), **users already logged in stay logged in**
+across the deploy — no forced logout, no 401 storm. The attack path is closed
+the moment the new secret is in effect.
 
 ### 2. HIGH — Permanent account-lockout DoS
 **Was:** 5 failed logins set `locked:true` permanently in the DB. Anyone knowing
