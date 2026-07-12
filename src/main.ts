@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { json, urlencoded } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -10,8 +12,13 @@ import { validateEnv } from './config/env.validation';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const logger = app.get(Logger);
+
+  // Behind Fly.io's proxy — trust exactly one hop so req.ip reflects the real
+  // client, not the proxy. Required for correct per-IP rate limiting; raw
+  // X-Forwarded-For headers are client-spoofable and must not be trusted.
+  app.set('trust proxy', 1);
 
   const config = app.get(ConfigService);
   validateEnv(config);
@@ -40,6 +47,9 @@ async function bootstrap() {
     }),
   );
   app.use(cookieParser());
+  // Bound request body size to blunt large-payload abuse.
+  app.use(json({ limit: '100kb' }));
+  app.use(urlencoded({ extended: true, limit: '100kb' }));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -59,15 +69,19 @@ async function bootstrap() {
     'https://upsolve-it.hnuicpc.tech',
   ].filter(Boolean);
 
-  const vercelWildcard =
-    /^https?:\/\/[a-zA-Z0-9.-]+\.(vercel\.app|hnuicpc\.tech)$/;
+  // Only this project's Vercel previews and our own hnuicpc.tech subdomains.
+  // A blanket `*.vercel.app` match would let ANY attacker-deployed Vercel site
+  // make credentialed cross-origin requests to authenticated cookies.
+  const vercelWildcard = /^https:\/\/upsolve-i{1,2}t[a-z0-9-]*\.vercel\.app$/;
+  const hnuicpcWildcard = /^https:\/\/[a-z0-9-]+\.hnuicpc\.tech$/;
 
   app.enableCors({
     origin: (origin, callback) => {
       if (
         !origin ||
         staticOrigins.includes(origin) ||
-        vercelWildcard.test(origin)
+        vercelWildcard.test(origin) ||
+        hnuicpcWildcard.test(origin)
       ) {
         callback(null, true);
       } else {

@@ -40,7 +40,8 @@ const refreshLimiter = new RateLimiterMemory({
   blockDuration: 600,
 });
 
-// ponytail: per-user login fail tracker — 5 wrong → permanent DB lock.
+// Per-user failed-login throttle — 5 wrong within window → temporary block
+// (auto-clears after blockDuration). Not a permanent lock.
 const loginUserLimiter = new RateLimiterMemory({
   points: 5,
   duration: 900,
@@ -92,7 +93,15 @@ export class AuthService {
 
   async verifyAccessToken(token: string): Promise<{ userId: string } | null> {
     try {
-      const decoded = await this.jwt.verifyAsync(token);
+      const decoded = await this.jwt.verifyAsync<{
+        userId: string;
+        type?: string;
+      }>(token, { algorithms: ['HS256'] });
+      // Only tokens explicitly minted as access tokens may authenticate a
+      // request. Reset/verification tokens are signed with the same secret but
+      // carry a different `type` — reject them here to prevent using a
+      // password-reset token as a session (account-takeover fix).
+      if (decoded?.type !== 'access') return null;
       return decoded;
     } catch {
       return null;
@@ -197,7 +206,9 @@ export class AuthService {
       );
     }
 
-    const user = await this.userModel.findOne({ codeforcesHandle });
+    const user = await this.userModel
+      .findOne({ codeforcesHandle })
+      .collation({ locale: 'en', strength: 2 });
 
     // ponytail: check persistent DB lock before password check.
     if (user?.locked) {
@@ -206,20 +217,17 @@ export class AuthService {
 
     const ok = user ? await bcrypt.compare(password, user.password) : false;
     if (!user || !ok) {
-      // ponytail: consume a fail point for this user; auto-lock at threshold.
+      // Throttle repeated failures per-user with a TEMPORARY block (auto-clears
+      // after blockDuration). We intentionally do NOT set a permanent DB lock
+      // here: an attacker who knows a handle could otherwise lock any account
+      // indefinitely (DoS). Permanent `locked` is reserved for admin action.
       if (user) {
         try {
           await loginUserLimiter.consume(String(user._id));
         } catch (err) {
           if (err instanceof RateLimiterRes) {
-            await this.userModel.findByIdAndUpdate(user._id, { locked: true });
-            await this.auditLogs.logAction(
-              'LOCK_USER',
-              'User',
-              user._id,
-              user.codeforcesHandle,
-              { reason: '5 failed login attempts' },
-              user._id,
+            throw new UnauthorizedException(
+              'Too many failed attempts. Try again later.',
             );
           }
         }
@@ -248,7 +256,7 @@ export class AuthService {
     if (!user) throw new BadRequestException('User not found');
 
     const verificationToken = await this.jwt.signAsync(
-      { userId: String(user._id), handle: user.codeforcesHandle },
+      { userId: String(user._id), handle: user.codeforcesHandle, type: 'verify' },
       { expiresIn: '5m' },
     );
 
@@ -260,10 +268,15 @@ export class AuthService {
       throw new BadRequestException('Verification token is required');
     }
 
-    let decoded: { userId?: string; handle?: string; iat?: number };
+    let decoded: { userId?: string; handle?: string; iat?: number; type?: string };
     try {
-      decoded = await this.jwt.verifyAsync(verificationToken);
+      decoded = await this.jwt.verifyAsync(verificationToken, {
+        algorithms: ['HS256'],
+      });
     } catch {
+      throw new BadRequestException('Invalid or expired verification token');
+    }
+    if (decoded?.type !== 'verify') {
       throw new BadRequestException('Invalid or expired verification token');
     }
 
@@ -309,7 +322,7 @@ export class AuthService {
     }
 
     const resetToken = await this.jwt.signAsync(
-      { userId: decoded.userId },
+      { userId: decoded.userId, type: 'reset' },
       { expiresIn: '10m' },
     );
 
@@ -334,10 +347,15 @@ export class AuthService {
         throw new BadRequestException(passwordValidation.errors.join('. '));
       }
 
-      let decoded: { userId?: string };
+      let decoded: { userId?: string; type?: string };
       try {
-        decoded = await this.jwt.verifyAsync(body.resetToken);
+        decoded = await this.jwt.verifyAsync(body.resetToken, {
+          algorithms: ['HS256'],
+        });
       } catch {
+        throw new BadRequestException('Invalid or expired reset token');
+      }
+      if (decoded?.type !== 'reset') {
         throw new BadRequestException('Invalid or expired reset token');
       }
 
@@ -432,7 +450,10 @@ export class AuthService {
   }
 
   private async issueTokens(user: UserDocument) {
-    const accessToken = await this.jwt.signAsync({ userId: user._id });
+    const accessToken = await this.jwt.signAsync({
+      userId: user._id,
+      type: 'access',
+    });
 
     const refreshTokenValue = generateRefreshToken();
     const hashedToken = hashRefreshToken(refreshTokenValue);
@@ -467,12 +488,19 @@ export class AuthService {
     }
 
     const hashed = hashRefreshToken(refreshTokenValue);
-    const tokenDoc = await this.refreshTokenModel.findOne({
-      token: hashed,
-      revoked: false,
-      expiresAt: { $gt: new Date() },
-    });
+    const tokenDoc = await this.refreshTokenModel.findOne({ token: hashed });
     if (!tokenDoc) throw new UnauthorizedException('Invalid refresh');
+
+    // Reuse detection: a token that was already rotated (revoked) is being
+    // replayed — a sign of theft. Revoke the entire token family for this
+    // user and reject, forcing re-login on all devices.
+    if (tokenDoc.revoked || tokenDoc.expiresAt <= new Date()) {
+      await this.refreshTokenModel.updateMany(
+        { userId: tokenDoc.userId, revoked: false },
+        { $set: { revoked: true, revokedAt: new Date() } },
+      );
+      throw new UnauthorizedException('Invalid refresh');
+    }
 
     const user = await this.userModel.findById(tokenDoc.userId);
     if (!user) throw new UnauthorizedException('Invalid refresh');
@@ -500,7 +528,10 @@ export class AuthService {
       revoked: false,
     });
 
-    const accessToken = await this.jwt.signAsync({ userId: user._id });
+    const accessToken = await this.jwt.signAsync({
+      userId: user._id,
+      type: 'access',
+    });
     return {
       user: toPublicUser(user),
       token: accessToken,

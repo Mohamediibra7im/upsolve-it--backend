@@ -18,6 +18,12 @@ function esc(s: string): string {
     .replace(/'/g, '&#039;');
 }
 
+// Strip CR/LF so user-controlled values can't inject extra mail headers
+// when placed into From/Subject/Reply-To.
+function headerSafe(s: string): string {
+  return s.replace(/[\r\n]+/g, ' ').trim();
+}
+
 export type ContactFormData = {
   name: string;
   email: string;
@@ -86,10 +92,10 @@ export class ContactService {
     `;
 
     await transporter.sendMail({
-      from: `"${escName} [${escEmail}]" <${smtpEmail}>`,
+      from: `"${headerSafe(data.name)} [${headerSafe(data.email)}]" <${smtpEmail}>`,
       to: smtpEmail,
-      replyTo: data.email,
-      subject: `[SIGNAL] ${escCategory.toUpperCase()}: ${escSubject}`,
+      replyTo: headerSafe(data.email),
+      subject: `[SIGNAL] ${headerSafe(data.category).toUpperCase()}: ${headerSafe(data.subject)}`,
       html: emailContent,
     });
 

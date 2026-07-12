@@ -166,11 +166,13 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('wrong password throws 401', async () => {
-      userModel.findOne.mockResolvedValue({
-        _id: 'uid',
-        codeforcesHandle: 'testuser',
-        password: 'hashed',
-        locked: false,
+      userModel.findOne.mockReturnValue({
+        collation: jest.fn().mockResolvedValue({
+          _id: 'uid',
+          codeforcesHandle: 'testuser',
+          password: 'hashed',
+          locked: false,
+        }),
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
@@ -180,11 +182,13 @@ describe('AuthService', () => {
     });
 
     it('locked account throws 423', async () => {
-      userModel.findOne.mockResolvedValue({
-        _id: 'uid',
-        codeforcesHandle: 'testuser',
-        password: 'hashed',
-        locked: true,
+      userModel.findOne.mockReturnValue({
+        collation: jest.fn().mockResolvedValue({
+          _id: 'uid',
+          codeforcesHandle: 'testuser',
+          password: 'hashed',
+          locked: true,
+        }),
       });
 
       let error: any;

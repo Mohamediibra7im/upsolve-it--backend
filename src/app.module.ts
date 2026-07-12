@@ -1,4 +1,4 @@
-import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { LoggerModule } from 'nestjs-pino';
@@ -17,7 +17,6 @@ import { RoadmapModule } from './modules/roadmap/roadmap.module';
 import { WhatsNewModule } from './modules/whats-new/whats-new.module';
 import { SuggestionsModule } from './modules/suggestions/suggestions.module';
 import { HealthModule } from './modules/health/health.module';
-import { LoggingMiddleware } from './common/middleware/logging.middleware';
 import { RateLimiterGuard } from './common/guards/rate-limiter.guard';
 
 @Module({
@@ -107,8 +106,4 @@ import { RateLimiterGuard } from './common/guards/rate-limiter.guard';
     },
   ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(LoggingMiddleware).forRoutes('*');
-  }
-}
+export class AppModule {}

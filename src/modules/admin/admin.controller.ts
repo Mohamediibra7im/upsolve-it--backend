@@ -18,6 +18,7 @@ import { AdminService } from './admin.service';
 import { ContactService } from '../contact/contact.service';
 import { TrainingLevelsService } from '../training-levels/training-levels.service';
 import { ReplaceLevelsBodyDto } from '../training-levels/dto/replace-levels.dto';
+import { UpdateRoleDto, SyncBatchDto, ReplyMessageDto } from './dto/admin.dto';
 
 @Controller('admin')
 export class AdminController {
@@ -36,17 +37,18 @@ export class AdminController {
   @UseGuards(AuthGuard, AdminGuard)
   @Get('users')
   async users(@Query('page') page?: string, @Query('limit') limit?: string) {
-    // ponytail: return all by default (client-side pagination handles display), cap at 5000
-    return await this.admin.listUsers(
-      page ? Number(page) : 1,
-      Math.min(Number(limit) || 0, 5000),
-    );
+    // Default to a bounded page (100). Callers may raise it up to 5000, but an
+    // unbounded full-collection load is never triggered implicitly.
+    const parsed = Number(limit);
+    const effectiveLimit =
+      Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 5000) : 100;
+    return await this.admin.listUsers(page ? Number(page) : 1, effectiveLimit);
   }
 
   @UseGuards(AuthGuard, AdminGuard)
   @Patch('users')
   async updateRole(
-    @Body() body: { userId: string; role: 'admin' | 'user' },
+    @Body() body: UpdateRoleDto,
     @CurrentUser() current: UserDocument,
   ) {
     return await this.admin.updateUserRole(
@@ -74,7 +76,7 @@ export class AdminController {
   @UseGuards(AuthGuard, AdminGuard)
   @Post('users/sync-batch')
   async syncBatchUserRatings(
-    @Body() body: { userIds: string[] },
+    @Body() body: SyncBatchDto,
     @CurrentUser() current: UserDocument,
   ) {
     return await this.admin.syncBatchUserRatings(
@@ -161,9 +163,9 @@ export class AdminController {
   @Post('contact/:id/reply')
   async replyContactMessage(
     @Param('id') id: string,
-    @Body('message') message: string,
+    @Body() body: ReplyMessageDto,
   ) {
-    return this.contact.sendReply(id, message);
+    return this.contact.sendReply(id, body.message);
   }
 
   @UseGuards(AuthGuard, AdminGuard)

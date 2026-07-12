@@ -99,12 +99,21 @@ export class RateLimiterGuard implements CanActivate {
       },
     };
 
-    return rateLimitMap[endpointKey] || null;
+    // Fallback: every unlisted route still gets a broad per-IP limit so no
+    // endpoint is completely unthrottled (scraping / DoS protection).
+    return (
+      rateLimitMap[endpointKey] || {
+        points: 120,
+        duration: 60,
+        keyPrefix: 'global',
+      }
+    );
   }
 
   private getKey(request: Request, prefix?: string): string {
     const ip = request.ip || request.socket.remoteAddress || 'unknown';
-    const userId = (request as any).user?.id || 'anonymous';
+    const user = (request as any).user;
+    const userId = user?._id?.toString() || user?.id || 'anonymous';
     return `${prefix || 'global'}:${ip}:${userId}`;
   }
 

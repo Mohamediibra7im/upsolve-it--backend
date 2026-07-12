@@ -472,7 +472,9 @@ export class AdminService {
       .lean();
 
     if (returnAll) {
-      const users = await usersQuery;
+      // Hard safety cap even on the "all" path so a huge collection can't be
+      // pulled fully into memory.
+      const users = await usersQuery.limit(5000);
       return { users, total: users.length, page: 1, limit: 0 };
     }
 
@@ -746,6 +748,16 @@ export class AdminService {
 
     let synced = 0;
     let failed = 0;
+    const now = Date.now();
+    const bulkOps: any[] = [];
+    const auditEntries: Array<{
+      action: string;
+      entity: string;
+      performedBy: string;
+      performedByHandle: string;
+      details: Record<string, any>;
+      entityId: string;
+    }> = [];
 
     for (const user of users) {
       const cfUser = cfMap.get(user.codeforcesHandle.toLowerCase());
@@ -759,32 +771,43 @@ export class AdminService {
       const maxRating: number = Number(cfUser.maxRating) || 0;
       const maxRank = cfUser.maxRank ?? getRankFromRating(maxRating);
 
-      await this.userModel.findByIdAndUpdate(user._id, {
-        rating: currentRating,
-        rank: currentRank,
-        maxRating,
-        maxRank,
-        organization: cfUser.organization,
-        lastSyncTime: Date.now(),
-        avatar: cfUser.avatar ?? user.avatar,
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: user._id },
+          update: {
+            $set: {
+              rating: currentRating,
+              rank: currentRank,
+              maxRating,
+              maxRank,
+              organization: cfUser.organization,
+              lastSyncTime: now,
+              avatar: cfUser.avatar ?? user.avatar,
+            },
+          },
+        },
       });
 
-      await this.auditLogs.logAction(
-        'SYNC_RATING',
-        'User',
-        currentAdminId,
-        adminHandle,
-        {
+      auditEntries.push({
+        action: 'SYNC_RATING',
+        entity: 'User',
+        performedBy: currentAdminId,
+        performedByHandle: adminHandle,
+        details: {
           userId: String(user._id),
           handle: user.codeforcesHandle,
           rating: currentRating,
           previousRating: user.rating,
         },
-        String(user._id),
-      );
+        entityId: String(user._id),
+      });
 
       synced++;
     }
+
+    // One round-trip for all updates, one for all audit logs (was N+N writes).
+    if (bulkOps.length) await this.userModel.bulkWrite(bulkOps);
+    await this.auditLogs.logActions(auditEntries);
 
     return { message: `Synced ${synced} user(s)`, synced, failed };
   }

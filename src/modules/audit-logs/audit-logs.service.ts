@@ -36,6 +36,34 @@ export class AuditLogsService {
     }
   }
 
+  async logActions(
+    entries: Array<{
+      action: string;
+      entity: string;
+      performedBy: Types.ObjectId | string;
+      performedByHandle: string;
+      details?: Record<string, any>;
+      entityId?: Types.ObjectId | string;
+    }>,
+  ) {
+    if (!entries.length) return;
+    try {
+      await this.auditLogModel.insertMany(
+        entries.map((e) => ({
+          action: e.action,
+          entity: e.entity,
+          entityId: e.entityId ? new Types.ObjectId(e.entityId) : undefined,
+          performedBy: new Types.ObjectId(e.performedBy),
+          performedByHandle: e.performedByHandle,
+          details: e.details ?? {},
+        })),
+        { ordered: false },
+      );
+    } catch (error) {
+      this.logger.error('Failed to save audit logs (bulk):', error);
+    }
+  }
+
   async listLogs(limit = 100, offset = 0, filters: any = {}) {
     const query: any = {};
 

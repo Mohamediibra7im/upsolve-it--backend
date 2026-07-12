@@ -49,8 +49,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const ip =
-      req.header('x-forwarded-for') ?? req.header('x-real-ip') ?? 'unknown';
+    const ip = req.ip ?? 'unknown';
     const result = await this.auth.login(
       dto.codeforcesHandle,
       dto.password,
@@ -68,8 +67,7 @@ export class AuthController {
   ) {
     const refreshToken = req.cookies?.refreshToken;
     if (!refreshToken) throw new UnauthorizedException('Missing refresh');
-    const ip =
-      req.header('x-forwarded-for') ?? req.header('x-real-ip') ?? 'unknown';
+    const ip = req.ip ?? 'unknown';
     const userAgent = req.header('user-agent') ?? 'unknown';
     const result = await this.auth.refresh(refreshToken, ip, userAgent);
     this.setRefreshCookie(res, result.refreshToken);

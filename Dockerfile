@@ -30,12 +30,20 @@ COPY . .
 # Build application
 RUN npm run build
 
+# Drop dev dependencies so the final image ships prod-only node_modules
+RUN npm prune --omit=dev
+
 
 # Final stage for app image
 FROM base
 
-# Copy built application
-COPY --from=build /app /app
+# Copy built application and production dependencies only
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+
+# Drop root: run as the unprivileged `node` user shipped in the base image
+USER node
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 3000
