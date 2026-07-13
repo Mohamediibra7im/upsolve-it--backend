@@ -68,10 +68,21 @@ export class HttpExceptionFilter implements ExceptionFilter {
       errorResponse.stack = exception.stack;
     }
 
-    this.logger.error(
-      `${request.method} ${request.url} - ${status} - ${message}`,
-      exception instanceof Error ? exception.stack : '',
-    );
+    // Log by severity: 5xx are real server errors (with stack); expected client
+    // failures (401/403/404/429 and other 4xx) are not errors — logging them at
+    // ERROR buries genuine problems. A logged-out user hitting a guarded route
+    // is normal traffic.
+    const logLine = `${request.method} ${request.url} - ${status} - ${message}`;
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error(
+        logLine,
+        exception instanceof Error ? exception.stack : '',
+      );
+    } else if (status === HttpStatus.UNAUTHORIZED || status === 403) {
+      this.logger.debug(logLine);
+    } else {
+      this.logger.warn(logLine);
+    }
 
     response.status(status).json(errorResponse);
   }

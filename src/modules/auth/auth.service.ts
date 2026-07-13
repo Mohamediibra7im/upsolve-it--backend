@@ -501,14 +501,27 @@ export class AuthService {
     const tokenDoc = await this.refreshTokenModel.findOne({ token: hashed });
     if (!tokenDoc) throw new UnauthorizedException('Invalid refresh');
 
-    // Reuse detection: a token that was already rotated (revoked) is being
-    // replayed — a sign of theft. Revoke the entire token family for this
-    // user and reject, forcing re-login on all devices.
-    if (tokenDoc.revoked || tokenDoc.expiresAt <= new Date()) {
-      await this.refreshTokenModel.updateMany(
-        { userId: tokenDoc.userId, revoked: false },
-        { $set: { revoked: true, revokedAt: new Date() } },
-      );
+    if (tokenDoc.expiresAt <= new Date()) {
+      throw new UnauthorizedException('Invalid refresh');
+    }
+
+    // Reuse detection with a grace window. Frontends routinely fire refresh
+    // concurrently (parallel 401s on load, multiple tabs); the loser of that
+    // race replays the just-rotated token. That is benign — reject only this
+    // call and let the winning refresh's new cookie win, WITHOUT revoking the
+    // family. Only a token revoked longer ago than the grace window is treated
+    // as genuine theft and revokes every session.
+    if (tokenDoc.revoked) {
+      const REUSE_GRACE_MS = 60_000;
+      const revokedAgo = tokenDoc.revokedAt
+        ? Date.now() - tokenDoc.revokedAt.getTime()
+        : Number.POSITIVE_INFINITY;
+      if (revokedAgo > REUSE_GRACE_MS) {
+        await this.refreshTokenModel.updateMany(
+          { userId: tokenDoc.userId, revoked: false },
+          { $set: { revoked: true, revokedAt: new Date() } },
+        );
+      }
       throw new UnauthorizedException('Invalid refresh');
     }
 
