@@ -37,11 +37,12 @@ export class AdminController {
   @UseGuards(AuthGuard, AdminGuard)
   @Get('users')
   async users(@Query('page') page?: string, @Query('limit') limit?: string) {
-    // Default to a bounded page (100). Callers may raise it up to 5000, but an
-    // unbounded full-collection load is never triggered implicitly.
+    // limit=0 → return all (service caps at 5000 to bound the load).
+    // A positive limit paginates; omitted defaults to all so the admin panel's
+    // client-side table/search sees every user.
     const parsed = Number(limit);
     const effectiveLimit =
-      Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 5000) : 100;
+      Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 5000) : 0;
     return await this.admin.listUsers(page ? Number(page) : 1, effectiveLimit);
   }
 
