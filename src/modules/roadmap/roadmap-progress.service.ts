@@ -45,6 +45,7 @@ import {
 } from './schemas/xp-transaction.schema';
 import { ImportProblemsDto } from './dto/import-problems.dto';
 import { toUtcDayKey, addUtcDays } from '../trainings/utils/date-key';
+import { computeLearningPct } from './utils/learning-progress';
 
 const MAX_STATUS_COUNT = 1000;
 
@@ -339,23 +340,10 @@ export class RoadmapProgressService {
     const progressMap = new Map(
       progressDocs.map((p) => [String(p.resourceId), p]),
     );
-    let totalContribution = 0;
 
-    for (const res of resources) {
-      const prog = progressMap.get(String(res._id));
-      if (!prog) continue;
-
-      if (res.type === 'Video') {
-        const watchPct = prog.watchPct ?? 0;
-        totalContribution += res.weight * (watchPct / 100);
-      } else {
-        if (prog.isCompleted) {
-          totalContribution += res.weight;
-        }
-      }
-    }
-
-    return Math.min(100, Math.round(totalContribution));
+    return computeLearningPct(resources, (i) =>
+      progressMap.get(String(resources[i]._id)),
+    );
   }
 
   private async checkLearningGate(

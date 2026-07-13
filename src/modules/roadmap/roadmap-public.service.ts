@@ -31,6 +31,7 @@ import {
   UserTopicProgress,
   UserTopicProgressDocument,
 } from './schemas/user-topic-progress.schema';
+import { computeLearningPct } from './utils/learning-progress';
 
 export type TopicProgressSnapshot = {
   learningPct: number;
@@ -326,23 +327,12 @@ export class RoadmapPublicService {
         };
       }
 
-      // Recalculate learning progress from filtered (language-specific) resources
-      let totalContribution = 0;
-      for (const res of resources) {
-        const prog = resourceProgress[String(res._id)];
-        if (!prog) continue;
-        if (res.type === 'Video') {
-          totalContribution += res.weight * ((prog.watchPct ?? 0) / 100);
-        } else {
-          if (prog.isCompleted) {
-            totalContribution += res.weight;
-          }
-        }
-      }
-      learningPct =
-        resources.length > 0
-          ? Math.min(100, Math.round(totalContribution))
-          : 100;
+      // Recalculate learning progress from filtered (language-specific)
+      // resources — same normalized formula the unlock gate uses.
+      learningPct = computeLearningPct(
+        resources,
+        (i) => resourceProgress[String(resources[i]._id)],
+      );
 
       const probProg = await this.problemProgressModel
         .find({
