@@ -154,6 +154,12 @@ export class AdminController {
   }
 
   @UseGuards(AuthGuard, AdminGuard)
+  @Get('contact/unread')
+  async unreadContactSummary() {
+    return this.contact.unreadSummary();
+  }
+
+  @UseGuards(AuthGuard, AdminGuard)
   @Patch('contact/:id/read')
   async markContactRead(@Param('id') id: string) {
     return this.contact.markAsRead(id);

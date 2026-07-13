@@ -1040,11 +1040,7 @@ export class RoadmapProgressService {
     // Run count, top3, paginated entries, and user's own XP in parallel
     const [total, top3Docs, xpDocs, userXp] = await Promise.all([
       this.xpModel.countDocuments({}),
-      this.xpModel
-        .find({})
-        .sort({ totalXp: -1 })
-        .limit(3)
-        .lean(),
+      this.xpModel.find({}).sort({ totalXp: -1 }).limit(3).lean(),
       this.xpModel
         .find({})
         .sort({ totalXp: -1 })

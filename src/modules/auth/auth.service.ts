@@ -98,7 +98,8 @@ export class AuthService {
     private readonly config: ConfigService,
   ) {
     const secret = this.config.get<string>('JWT_REFRESH_SECRET');
-    if (!secret) throw new Error('JWT_REFRESH_SECRET must be set in environment');
+    if (!secret)
+      throw new Error('JWT_REFRESH_SECRET must be set in environment');
     this.resetSecret = secret;
   }
 
@@ -264,7 +265,11 @@ export class AuthService {
     if (!user) throw new BadRequestException('User not found');
 
     const verificationToken = await this.jwt.signAsync(
-      { userId: String(user._id), handle: user.codeforcesHandle, type: 'verify' },
+      {
+        userId: String(user._id),
+        handle: user.codeforcesHandle,
+        type: 'verify',
+      },
       { expiresIn: '5m', secret: this.resetSecret },
     );
 
@@ -276,7 +281,12 @@ export class AuthService {
       throw new BadRequestException('Verification token is required');
     }
 
-    let decoded: { userId?: string; handle?: string; iat?: number; type?: string };
+    let decoded: {
+      userId?: string;
+      handle?: string;
+      iat?: number;
+      type?: string;
+    };
     try {
       decoded = await this.jwt.verifyAsync(verificationToken, {
         algorithms: ['HS256'],
@@ -301,14 +311,19 @@ export class AuthService {
         signal: AbortSignal.timeout(8000),
       });
     } catch (error) {
-      this.logger.error(`Failed to reach Codeforces API for handle ${handle}:`, error);
+      this.logger.error(
+        `Failed to reach Codeforces API for handle ${handle}:`,
+        error,
+      );
       throw new BadRequestException(
         'Unable to reach Codeforces API. Please try again later.',
       );
     }
     const submissionsData = await submissionsRes.json();
     if (submissionsData?.status !== 'OK') {
-      this.logger.warn(`Codeforces API returned non-OK status for handle ${handle}: ${JSON.stringify(submissionsData)}`);
+      this.logger.warn(
+        `Codeforces API returned non-OK status for handle ${handle}: ${JSON.stringify(submissionsData)}`,
+      );
       throw new BadRequestException(
         'Codeforces API is currently unavailable. Please try again.',
       );

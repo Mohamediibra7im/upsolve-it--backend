@@ -31,6 +31,10 @@ const envSchema = z.object({
   REDIS_URL: z.string().optional(),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
+  // Optional basic-auth gate for the /docs Swagger page. Set both to require
+  // credentials; leave unset to serve docs openly.
+  SWAGGER_USER: z.string().optional(),
+  SWAGGER_PASSWORD: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
@@ -65,6 +69,8 @@ export function validateEnv(config: ConfigService): EnvConfig {
     REDIS_URL: config.get<string>('REDIS_URL'),
     RATE_LIMIT_WINDOW_MS: config.get<string>('RATE_LIMIT_WINDOW_MS'),
     RATE_LIMIT_MAX_REQUESTS: config.get<string>('RATE_LIMIT_MAX_REQUESTS'),
+    SWAGGER_USER: config.get<string>('SWAGGER_USER'),
+    SWAGGER_PASSWORD: config.get<string>('SWAGGER_PASSWORD'),
   };
 
   const result = envSchema.safeParse(configObject);

@@ -78,7 +78,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
         logLine,
         exception instanceof Error ? exception.stack : '',
       );
-    } else if (status === HttpStatus.UNAUTHORIZED || status === 403) {
+    } else if (
+      status === HttpStatus.UNAUTHORIZED ||
+      status === HttpStatus.FORBIDDEN
+    ) {
       this.logger.debug(logLine);
     } else {
       this.logger.warn(logLine);

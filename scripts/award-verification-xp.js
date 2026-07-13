@@ -9,7 +9,7 @@ const mongoose = require('mongoose');
 
 const MONGO_URI =
   process.env.MONGODB_URI ??
-  'mongodb://training-tracker:MIcJjqiXoIl6HUSQ@ac-sxtovbd-shard-00-00.piz32f2.mongodb.net:27017,ac-sxtovbd-shard-00-01.piz32f2.mongodb.net:27017,ac-sxtovbd-shard-00-02.piz32f2.mongodb.net:27017/training-tracker-prod?replicaSet=atlas-cknx67-shard-0&ssl=true&authSource=admin';
+  'mongodb://localhost:27017/training-tracker';
 
 const VERIFICATION_XP = 50;
 const SOURCE_TYPE = 'verification';

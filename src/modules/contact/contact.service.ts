@@ -157,6 +157,24 @@ export class ContactService {
     return { messages, total, page, limit };
   }
 
+  /**
+   * Unread-support summary that backs the admin header notification bell.
+   * Returns the total unread count plus the most recent unread messages so the
+   * dropdown can show real, actionable items instead of a static dot.
+   */
+  async unreadSummary(limit = 5) {
+    const [count, items] = await Promise.all([
+      this.contactModel.countDocuments({ read: false }),
+      this.contactModel
+        .find({ read: false })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .select('name email subject category createdAt')
+        .lean(),
+    ]);
+    return { count, items };
+  }
+
   async markAsRead(id: string) {
     return this.contactModel
       .findByIdAndUpdate(id, { read: true }, { new: true })

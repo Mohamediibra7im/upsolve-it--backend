@@ -2,6 +2,8 @@
 
 > **Backend Protocol: NEXUS-CORE v2.0**
 > The scalable intelligence engine powering the Upsolve.it tactical platform.
+>
+> 🖥️ **Frontend Console**: [frontend--upsolve-it](https://github.com/Mohamediibra7im/upsolve-it)
 
 ---
 
@@ -18,7 +20,7 @@
 
 The full API specification is available via Swagger. When the backend is running, you can access the interactive documentation directly at:
 
-- **Direct**: `https://api.hnuicpc.tech/` (Root access)
+- **Direct**: `https://api.upsolve-it.hnuicpc.tech` (Root access)
 
 ## 📡 Key Modules
 

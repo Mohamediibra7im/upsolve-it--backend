@@ -5,6 +5,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { json, urlencoded } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { timingSafeEqual } from 'node:crypto';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
@@ -15,9 +16,10 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const logger = app.get(Logger);
 
-  // Behind Fly.io's proxy — trust exactly one hop so req.ip reflects the real
-  // client, not the proxy. Required for correct per-IP rate limiting; raw
-  // X-Forwarded-For headers are client-spoofable and must not be trusted.
+  // Behind a single reverse proxy (nginx/Caddy) — trust exactly one hop so
+  // req.ip reflects the real client, not the proxy. Required for correct
+  // per-IP rate limiting; raw X-Forwarded-For headers are client-spoofable
+  // and must not be trusted.
   app.set('trust proxy', 1);
 
   const config = app.get(ConfigService);
@@ -40,6 +42,9 @@ async function bootstrap() {
           'object-src': ["'none'"],
           'script-src': ["'self'", "'unsafe-inline'"],
           'script-src-attr': ["'unsafe-inline'"],
+          // Swagger UI spins up a web worker from a blob URL; without this it
+          // falls back to default-src 'self' and the docs page breaks.
+          'worker-src': ["'self'", 'blob:'],
           'style-src': ["'self'", 'https:', "'unsafe-inline'"],
           'upgrade-insecure-requests': [],
         },
@@ -93,25 +98,56 @@ async function bootstrap() {
   });
   app.setGlobalPrefix('api', { exclude: ['/'] });
 
-  // Swagger Configuration — disabled in production
-  if (process.env.NODE_ENV !== 'production') {
-    const swaggerConfig = new DocumentBuilder()
-      .setTitle('Upsolve.it - Intelligence Engine')
-      .setDescription(
-        'The scalable intelligence engine powering the Upsolve.it tactical platform.',
-      )
-      .setVersion('2.0')
-      .addTag('Intelligence')
-      .addBearerAuth()
-      .build();
-
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('docs', app, document, {
-      customSiteTitle: 'Upsolve.it - Protocol Docs',
+  // Swagger / API docs at /docs. Served in every environment.
+  // Optional basic-auth gate: set SWAGGER_USER + SWAGGER_PASSWORD to require
+  // credentials (recommended in production, since these docs expose the full
+  // API surface). Leave them unset to serve the docs openly.
+  const swaggerUser = config.get<string>('SWAGGER_USER');
+  const swaggerPassword = config.get<string>('SWAGGER_PASSWORD');
+  if (swaggerUser && swaggerPassword) {
+    app.use(['/docs', '/docs-json'], (req, res, next) => {
+      const header = req.headers.authorization ?? '';
+      const [scheme, encoded] = header.split(' ');
+      const safeEqual = (a: string, b: string) => {
+        const ab = Buffer.from(a);
+        const bb = Buffer.from(b);
+        return ab.length === bb.length && timingSafeEqual(ab, bb);
+      };
+      if (scheme === 'Basic' && encoded) {
+        const [user, pass] = Buffer.from(encoded, 'base64')
+          .toString()
+          .split(':');
+        if (
+          safeEqual(user ?? '', swaggerUser) &&
+          safeEqual(pass ?? '', swaggerPassword)
+        ) {
+          return next();
+        }
+      }
+      res
+        .set('WWW-Authenticate', 'Basic realm="Upsolve.it API Docs"')
+        .status(401)
+        .send('Authentication required');
     });
   }
 
-  // ponytail: 0.0.0.0 required for Fly.io/Docker — proxy connects from outside
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Upsolve.it - Intelligence Engine')
+    .setDescription(
+      'The scalable intelligence engine powering the Upsolve.it tactical platform.',
+    )
+    .setVersion('2.0')
+    .addTag('Intelligence')
+    .addBearerAuth()
+    .build();
+
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, document, {
+    customSiteTitle: 'Upsolve.it - Protocol Docs',
+    swaggerOptions: { persistAuthorization: true },
+  });
+
+  // Bind 0.0.0.0 so the reverse proxy (and Docker) can reach the app.
   await app.listen(port, '0.0.0.0');
   logger.log(`Application is running on: http://0.0.0.0:${port}`);
 }

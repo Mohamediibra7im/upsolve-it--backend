@@ -12,7 +12,10 @@ function getExpectedSolveProb(
   return 1 / (1 + Math.pow(10, ratingDiff / 400));
 }
 
-function getTimeFactor(solveTimeMinutes: number, problemRating: number): number {
+function getTimeFactor(
+  solveTimeMinutes: number,
+  problemRating: number,
+): number {
   if (solveTimeMinutes <= 0) return 1;
   const expectedSeconds = expectedTimeSecondsFromRating(problemRating);
   const expectedMinutes = expectedSeconds / 60;
@@ -82,11 +85,6 @@ export function computeSessionPerformance(
   },
   userRating: number,
 ): number {
-  const contestDuration = Math.max(
-    1,
-    (input.endTime - input.startTime) / 60000,
-  );
-
   let total = 0;
   let count = 0;
   const problems = input.problems ?? [];
@@ -97,8 +95,7 @@ export function computeSessionPerformance(
     const solved = isSolved(p);
     const st = solveTimeMinutes(p, input.startTime);
     const expectedProb = getExpectedSolveProb(userRating, rating);
-    const timeFactor =
-      solved && st != null ? getTimeFactor(st, rating) : 1;
+    const timeFactor = solved && st != null ? getTimeFactor(st, rating) : 1;
     total += solvePerformanceToRating(rating, expectedProb, solved, timeFactor);
     count++;
   }

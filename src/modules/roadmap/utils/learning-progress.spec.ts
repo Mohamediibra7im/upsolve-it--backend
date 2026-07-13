@@ -9,9 +9,7 @@ describe('computeLearningPct', () => {
     // One video, weight 0 (schema default), watched 100%. Previously produced 0
     // and the topic could never unlock. Now normalizes to 100.
     const resources = [{ type: 'Video', weight: 0 }];
-    expect(
-      computeLearningPct(resources, () => ({ watchPct: 100 })),
-    ).toBe(100);
+    expect(computeLearningPct(resources, () => ({ watchPct: 100 }))).toBe(100);
   });
 
   it('gives 50 for one of two equal (zero-weight) articles completed', () => {
