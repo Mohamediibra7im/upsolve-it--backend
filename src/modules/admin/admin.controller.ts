@@ -34,6 +34,12 @@ export class AdminController {
     return await this.admin.stats();
   }
 
+  /** Public — no auth required. Returns only the total user count. */
+  @Get('users/count')
+  async usersCount() {
+    return await this.admin.getUserCount();
+  }
+
   @UseGuards(AuthGuard, AdminGuard)
   @Get('users')
   async users(@Query('page') page?: string, @Query('limit') limit?: string) {

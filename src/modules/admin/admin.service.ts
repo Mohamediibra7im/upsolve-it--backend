@@ -57,6 +57,12 @@ export class AdminService {
     private readonly auditLogs: AuditLogsService,
   ) {}
 
+  /** Public — returns only the total number of registered users. */
+  async getUserCount(): Promise<{ count: number }> {
+    const count = await this.userModel.countDocuments();
+    return { count };
+  }
+
   async stats() {
     const now = Date.now();
     if (this.statsCache && this.statsCache.expiresAt > now) {
