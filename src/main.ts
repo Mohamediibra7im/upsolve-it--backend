@@ -72,6 +72,8 @@ async function bootstrap() {
     'http://127.0.0.1:3000',
     'https://upsolve-iit.vercel.app',
     'https://upsolve-it.hnuicpc.tech',
+    'https://mohamediibrahim.dev',
+    'https://www.mohamediibrahim.dev',
   ].filter(Boolean);
 
   // Only this project's Vercel previews and our own hnuicpc.tech subdomains.
