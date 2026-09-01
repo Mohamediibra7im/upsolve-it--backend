@@ -99,6 +99,12 @@ export class RateLimiterGuard implements CanActivate {
       },
     };
 
+    // Health endpoints are hit frequently by Fly.io / Docker health checkers;
+    // exempt them from rate limiting so probes never get 429'd.
+    if (controller.name === 'HealthController') {
+      return null;
+    }
+
     // Fallback: every unlisted route still gets a broad per-IP limit so no
     // endpoint is completely unthrottled (scraping / DoS protection).
     return (

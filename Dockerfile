@@ -45,6 +45,10 @@ COPY --from=build /app/package.json ./package.json
 # Drop root: run as the unprivileged `node` user shipped in the base image
 USER node
 
+# Lightweight health check so Fly / Docker knows the container is serving
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/api/health/live').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))"
+
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 3000
 CMD [ "npm", "run", "prod" ]

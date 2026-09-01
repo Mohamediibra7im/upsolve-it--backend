@@ -81,6 +81,7 @@ async function bootstrap() {
   // make credentialed cross-origin requests to authenticated cookies.
   const vercelWildcard = /^https:\/\/upsolve-i{1,2}t[a-z0-9-]*\.vercel\.app$/;
   const hnuicpcWildcard = /^https:\/\/[a-z0-9-]+\.hnuicpc\.tech$/;
+  const flyDevWildcard = /^https:\/\/upsolve-it-backend[a-z0-9-]*\.fly\.dev$/;
 
   app.enableCors({
     origin: (origin, callback) => {
@@ -88,7 +89,8 @@ async function bootstrap() {
         !origin ||
         staticOrigins.includes(origin) ||
         vercelWildcard.test(origin) ||
-        hnuicpcWildcard.test(origin)
+        hnuicpcWildcard.test(origin) ||
+        flyDevWildcard.test(origin)
       ) {
         callback(null, true);
       } else {
