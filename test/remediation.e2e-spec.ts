@@ -202,6 +202,39 @@ describe('backend regression contracts (disposable replica set)', () => {
     );
   });
 
+  it('rejects a JSON refresh cookie and still clears it during logout', async () => {
+    const cookie = 'refreshToken=j:%7B%22unexpected%22%3Atrue%7D';
+    await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .set('Cookie', cookie)
+      .set('X-Forwarded-For', `198.51.100.${++ip}`)
+      .expect(401);
+    const logout = await request(app.getHttpServer())
+      .post('/api/auth/logout')
+      .set('Cookie', cookie)
+      .set('X-Forwarded-For', `198.51.100.${++ip}`)
+      .expect(201);
+    expect(
+      logout.headers['set-cookie'].some((value: string) =>
+        value.startsWith('refreshToken=;'),
+      ),
+    ).toBe(true);
+  });
+
+  it('reports the configured quota consistently before and after consuming requests', async () => {
+    const clientIp = `198.51.100.${++ip}`;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await request(app.getHttpServer())
+        .post('/api/friends/requests')
+        .set('X-Forwarded-For', clientIp)
+        .send({});
+      expect(response.headers['x-ratelimit-limit']).toBe('10');
+      expect(response.headers['x-ratelimit-remaining']).toBe(
+        String(9 - attempt),
+      );
+    }
+  });
+
   it('rejects a profile code from a different challenge', async () => {
     const a = await post('auth/initiate-reset', { handle: 'tourist' }).expect(
       201,
@@ -844,5 +877,35 @@ describe('backend regression contracts (disposable replica set)', () => {
         .set('X-Forwarded-For', clientIp)
         .send({});
     expect(response.status).toBe(429);
+  });
+  it('keeps historical balance adjustments out of calendar period scores', async () => {
+    await model('UserXp').create({ userId: user._id, totalXp: 510 });
+    await model('XpTransaction').create([
+      {
+        userId: user._id,
+        amount: 10,
+        reason: 'earned',
+        sourceType: 'problem',
+        sourceId: new Types.ObjectId(),
+      },
+      {
+        userId: user._id,
+        amount: 500,
+        reason: 'historical',
+        sourceType: 'historical_balance_reconciliation',
+        sourceId: new Types.ObjectId(),
+      },
+    ]);
+    const service = app.get(RoadmapProgressService);
+    for (const period of ['weekly', 'monthly']) {
+      const result = await service.getLeaderboard({ period }, uid());
+      expect(result.leaderboard[0].totalXp).toBe(10);
+      expect(result.top3[0].totalXp).toBe(10);
+      expect(result.myRank).toBe(1);
+    }
+    expect(
+      (await service.getLeaderboard({ period: 'all' }, uid())).leaderboard[0]
+        .totalXp,
+    ).toBe(510);
   });
 });

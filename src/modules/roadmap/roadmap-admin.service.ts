@@ -296,7 +296,7 @@ export class RoadmapAdminService {
     audit?: RoadmapAdminAudit,
   ) {
     const id = this.toObjectId(levelId, 'Level');
-    let doc: any = await this.levelModel.findById(id);
+    let doc: RoadmapLevelDocument | null = await this.levelModel.findById(id);
     if (!doc) throw new NotFoundException('Level not found');
 
     if (dto.orderIndex != null && dto.orderIndex !== doc.orderIndex) {
@@ -305,8 +305,7 @@ export class RoadmapAdminService {
 
     if (dto.title !== undefined) doc.title = dto.title;
     if (dto.description !== undefined) doc.description = dto.description;
-    if (dto.isPublished !== undefined)
-      doc.isPublished = doc.isPublished = dto.isPublished;
+    if (dto.isPublished !== undefined) doc.isPublished = dto.isPublished;
     if (dto.visibility !== undefined) doc.visibility = dto.visibility;
     if (dto.allowedUserIds !== undefined) {
       doc.allowedUserIds = dto.allowedUserIds.map(
@@ -509,7 +508,7 @@ export class RoadmapAdminService {
     audit?: RoadmapAdminAudit,
   ) {
     const id = this.toObjectId(topicId, 'Topic');
-    let doc: any = await this.topicModel.findById(id);
+    let doc: RoadmapTopicDocument | null = await this.topicModel.findById(id);
     if (!doc) throw new NotFoundException('Topic not found');
 
     if (dto.orderIndex != null && dto.orderIndex !== doc.orderIndex) {
@@ -629,7 +628,8 @@ export class RoadmapAdminService {
     audit?: RoadmapAdminAudit,
   ) {
     const id = this.toObjectId(resourceId, 'Resource');
-    let doc: any = await this.resourceModel.findById(id);
+    let doc: RoadmapResourceDocument | null =
+      await this.resourceModel.findById(id);
     if (!doc) throw new NotFoundException('Resource not found');
 
     if (dto.orderIndex != null && dto.orderIndex !== doc.orderIndex) {
@@ -827,7 +827,8 @@ export class RoadmapAdminService {
     audit?: RoadmapAdminAudit,
   ) {
     const id = this.toObjectId(problemId, 'Problem');
-    let doc: any = await this.problemModel.findById(id);
+    let doc: RoadmapProblemDocument | null =
+      await this.problemModel.findById(id);
     if (!doc) throw new NotFoundException('Problem not found');
 
     if (dto.orderIndex != null && dto.orderIndex !== doc.orderIndex) {

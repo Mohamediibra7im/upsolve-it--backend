@@ -1,7 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, Types, type QueryFilter } from 'mongoose';
 import { AuditLog, AuditLogDocument } from './schemas/audit-log.schema';
+
+export interface AuditLogFilters {
+  action?: string;
+  entity?: string;
+  performedBy?: string;
+  performedByHandle?: string;
+}
 
 @Injectable()
 export class AuditLogsService {
@@ -64,8 +71,8 @@ export class AuditLogsService {
     }
   }
 
-  async listLogs(limit = 100, offset = 0, filters: any = {}) {
-    const query: any = {};
+  async listLogs(limit = 100, offset = 0, filters: AuditLogFilters = {}) {
+    const query: QueryFilter<AuditLogDocument> = {};
 
     if (filters.action) query.action = filters.action;
     if (filters.entity) query.entity = filters.entity;

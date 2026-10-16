@@ -66,7 +66,9 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const refreshToken = req.cookies?.refreshToken;
+    const rawRefreshToken: unknown = req.cookies?.refreshToken;
+    const refreshToken =
+      typeof rawRefreshToken === 'string' ? rawRefreshToken : undefined;
     if (!refreshToken) throw new UnauthorizedException('Missing refresh');
     const ip = req.ip ?? 'unknown';
     const userAgent = req.header('user-agent') ?? 'unknown';
@@ -79,7 +81,9 @@ export class AuthController {
   @Post('logout')
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const isProduction = this.config.get<string>('NODE_ENV') === 'production';
-    const refreshToken = req.cookies?.refreshToken;
+    const rawRefreshToken: unknown = req.cookies?.refreshToken;
+    const refreshToken =
+      typeof rawRefreshToken === 'string' ? rawRefreshToken : undefined;
     if (refreshToken) await this.auth.logout(refreshToken);
     res.clearCookie('refreshToken', {
       path: '/',

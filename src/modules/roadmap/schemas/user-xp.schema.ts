@@ -16,6 +16,9 @@ export class UserXp {
 
   @Prop({ type: Number, default: 0, index: true })
   totalXp!: number;
+
+  @Prop({ type: Date })
+  ledgerReconciledAt?: Date;
 }
 
 export const UserXpSchema = SchemaFactory.createForClass(UserXp);

@@ -12,7 +12,7 @@
     "dev": "nest start --watch",
     "debug": "nest start --debug --watch",
     "prod": "node dist/main",
-    "lint": "eslint \"src/**/*.ts\" \"api/**/*.ts\"",
+    "lint": "eslint \"src/**/*.ts\" \"api/**/*.ts\" --max-warnings=0",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -21,7 +21,9 @@
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc --project tsconfig.check.json --noEmit --incremental false",
     "references:check": "node scripts/normalize-references.cjs",
-    "references:normalize": "node scripts/normalize-references.cjs --apply"
+    "references:normalize": "node scripts/normalize-references.cjs --apply",
+    "xp:check": "node scripts/reconcile-xp.cjs",
+    "xp:reconcile": "node scripts/reconcile-xp.cjs --apply"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

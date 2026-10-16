@@ -19,6 +19,9 @@ export class XpTransaction {
 
   @Prop({ type: SchemaTypes.ObjectId, required: true })
   sourceId!: Types.ObjectId;
+
+  @Prop({ type: Object })
+  reconciliation?: { preservedBalance: number; previousLedgerTotal: number };
 }
 
 export const XpTransactionSchema = SchemaFactory.createForClass(XpTransaction);

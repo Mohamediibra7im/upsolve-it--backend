@@ -166,3 +166,10 @@ Production CORS permits exact trusted origins. Set `FRONTEND_ORIGIN` and, when n
 Run `npm test -- --runInBand`, `npm run test:e2e -- --runInBand`, `npm run typecheck`, `npm run lint`, and `npm run build` before release. Integration tests create a disposable local MongoDB replica set and do not load `.env` or connect to application databases.
 
 Before releasing the ObjectId schema correction, run `npm run references:check` for a read-only report. `npm run references:normalize` converts only valid historical string IDs, inside a transaction; it refuses collisions and invalid IDs and never deletes records or changes XP. Historical XP discrepancies require separate evidence before repair.
+
+
+## Historical XP reconciliation
+
+`npm run xp:check` inspects ledger differences without making changes. `npm run xp:reconcile` preserves account balances and existing transactions, writes a private EJSON backup in `.tmp`, and appends explicitly marked historical bookkeeping adjustments in one MongoDB transaction. These adjustments are excluded from weekly/monthly rankings and do not assert when or how XP was earned. Global all-time scores remain unchanged. Re-running is safe; a new mismatch on a reconciled account is refused for investigation. Do not use the legacy verification-award script to overwrite balances.
+
+Tests use an isolated replica set and `MONGODB_URI_TEST`; they never load application database credentials. Backup failures and rejected writes roll back the entire repair. Concurrent XP awards retry against a fresh snapshot.

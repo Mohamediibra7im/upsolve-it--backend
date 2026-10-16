@@ -263,7 +263,7 @@ export class AuthService {
     }
 
     // ponytail: successful login — reset per-user fail counter.
-    loginUserLimiter.delete(String(user._id));
+    await loginUserLimiter.delete(String(user._id));
 
     await this.auditLogs.logAction(
       'LOGIN',

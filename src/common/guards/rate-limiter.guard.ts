@@ -167,11 +167,11 @@ export class RateLimiterGuard implements CanActivate {
     try {
       const rateLimiterRes: RateLimiterRes = await limiter.consume(key);
 
-      this.setRateLimitHeaders(response, rateLimiterRes);
+      this.setRateLimitHeaders(response, rateLimiterRes, limiter.points);
       return true;
     } catch (rateLimiterRes) {
       if (rateLimiterRes instanceof RateLimiterRes) {
-        this.setRateLimitHeaders(response, rateLimiterRes);
+        this.setRateLimitHeaders(response, rateLimiterRes, limiter.points);
 
         const retryAfter = Math.ceil(rateLimiterRes.msBeforeNext / 1000);
         response.setHeader('Retry-After', retryAfter.toString());
@@ -185,13 +185,9 @@ export class RateLimiterGuard implements CanActivate {
   private setRateLimitHeaders(
     response: Response,
     rateLimiterRes: RateLimiterRes,
+    points: number,
   ): void {
-    response.setHeader(
-      'X-RateLimit-Limit',
-      (rateLimiterRes as any).totalPoints ??
-        (rateLimiterRes as any).consumedPoints ??
-        0,
-    );
+    response.setHeader('X-RateLimit-Limit', points);
     response.setHeader('X-RateLimit-Remaining', rateLimiterRes.remainingPoints);
     response.setHeader(
       'X-RateLimit-Reset',

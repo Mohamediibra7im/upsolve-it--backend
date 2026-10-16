@@ -7,6 +7,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { validateEnv } from './config/env.validation';
+import type { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -24,30 +25,33 @@ async function bootstrap() {
   const swaggerUser = config.get<string>('SWAGGER_USER');
   const swaggerPassword = config.get<string>('SWAGGER_PASSWORD');
   if (swaggerUser && swaggerPassword) {
-    app.use(['/docs', '/docs-json'], (req, res, next) => {
-      const header = req.headers.authorization ?? '';
-      const [scheme, encoded] = header.split(' ');
-      const safeEqual = (a: string, b: string) => {
-        const ab = Buffer.from(a);
-        const bb = Buffer.from(b);
-        return ab.length === bb.length && timingSafeEqual(ab, bb);
-      };
-      if (scheme === 'Basic' && encoded) {
-        const [user, pass] = Buffer.from(encoded, 'base64')
-          .toString()
-          .split(':');
-        if (
-          safeEqual(user ?? '', swaggerUser) &&
-          safeEqual(pass ?? '', swaggerPassword)
-        ) {
-          return next();
+    app.use(
+      ['/docs', '/docs-json'],
+      (req: Request, res: Response, next: NextFunction) => {
+        const header = req.headers.authorization ?? '';
+        const [scheme, encoded] = header.split(' ');
+        const safeEqual = (a: string, b: string) => {
+          const ab = Buffer.from(a);
+          const bb = Buffer.from(b);
+          return ab.length === bb.length && timingSafeEqual(ab, bb);
+        };
+        if (scheme === 'Basic' && encoded) {
+          const [user, pass] = Buffer.from(encoded, 'base64')
+            .toString()
+            .split(':');
+          if (
+            safeEqual(user ?? '', swaggerUser) &&
+            safeEqual(pass ?? '', swaggerPassword)
+          ) {
+            return next();
+          }
         }
-      }
-      res
-        .set('WWW-Authenticate', 'Basic realm="Upsolve.it API Docs"')
-        .status(401)
-        .send('Authentication required');
-    });
+        res
+          .set('WWW-Authenticate', 'Basic realm="Upsolve.it API Docs"')
+          .status(401)
+          .send('Authentication required');
+      },
+    );
   }
 
   const swaggerConfig = new DocumentBuilder()

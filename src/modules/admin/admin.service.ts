@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, Types, type AnyBulkWriteOperation } from 'mongoose';
 import { AuthService } from '../auth/auth.service';
 import { User, type UserDocument } from '../auth/schemas/user.schema';
 import {
@@ -17,7 +17,10 @@ import {
   UpsolvedProblem,
   type UpsolvedProblemDocument,
 } from '../upsolve/schemas/upsolved-problem.schema';
-import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import {
+  AuditLogsService,
+  type AuditLogFilters,
+} from '../audit-logs/audit-logs.service';
 import { averageEffectiveProblemRatingForSession } from '../trainings/utils/session-performance';
 import {
   RoadmapLevel,
@@ -152,7 +155,7 @@ export class AdminService {
           },
         },
       ]),
-      this.userModel.aggregate([
+      this.userModel.aggregate<{ _id: string; count: number }>([
         {
           $project: {
             band: {
@@ -190,7 +193,11 @@ export class AdminService {
         },
         { $group: { _id: '$band', count: { $sum: 1 } } },
       ]),
-      this.trainingModel.aggregate([
+      this.trainingModel.aggregate<{
+        _id: string | null;
+        sessions: number;
+        solved: number;
+      }>([
         {
           $group: {
             _id: '$trainingMode',
@@ -200,7 +207,7 @@ export class AdminService {
         },
         { $sort: { sessions: -1 } },
       ]),
-      this.userModel.aggregate([
+      this.userModel.aggregate<{ _id: string; users: number }>([
         { $match: { createdAt: { $gte: trendStart } } },
         {
           $group: {
@@ -211,7 +218,7 @@ export class AdminService {
           },
         },
       ]),
-      this.trainingModel.aggregate([
+      this.trainingModel.aggregate<{ _id: string; sessions: number }>([
         { $match: { startTime: { $gte: trendStartMs } } },
         {
           $group: {
@@ -225,7 +232,7 @@ export class AdminService {
           },
         },
       ]),
-      this.upsolveModel.aggregate([
+      this.upsolveModel.aggregate<{ _id: string; upsolves: number }>([
         { $match: { createdAt: { $gte: trendStart } } },
         {
           $group: {
@@ -399,7 +406,11 @@ export class AdminService {
   }
 
   private buildTrainingModes(
-    trainingModesRaw: { _id: string; sessions: number; solved: number }[],
+    trainingModesRaw: {
+      _id: string | null;
+      sessions: number;
+      solved: number;
+    }[],
   ) {
     const modeOrder = ['ladder', 'weakness', 'speed', 'contest', 'endurance'];
     const modeMap = new Map(
@@ -664,7 +675,7 @@ export class AdminService {
     };
   }
 
-  async listLogs(limit?: number, offset?: number, filters?: any) {
+  async listLogs(limit?: number, offset?: number, filters?: AuditLogFilters) {
     return await this.auditLogs.listLogs(limit, offset, filters);
   }
 
@@ -755,7 +766,7 @@ export class AdminService {
     let synced = 0;
     let failed = 0;
     const now = Date.now();
-    const bulkOps: any[] = [];
+    const bulkOps: AnyBulkWriteOperation<UserDocument>[] = [];
     const auditEntries: Array<{
       action: string;
       entity: string;

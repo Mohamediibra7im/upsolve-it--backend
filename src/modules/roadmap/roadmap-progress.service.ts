@@ -1,3 +1,4 @@
+import { HISTORICAL_RECONCILIATION_SOURCE } from '../../common/database/xp-reconciliation';
 import {
   BadRequestException,
   Injectable,
@@ -1034,7 +1035,10 @@ export class RoadmapProgressService {
     let topicIds: Types.ObjectId[] | undefined;
     let problemIds: Types.ObjectId[] | undefined;
     const match: Record<string, unknown> = {};
-    if (since) match.createdAt = { $gte: since, $lte: new Date() };
+    if (since) {
+      match.createdAt = { $gte: since, $lte: new Date() };
+      match.sourceType = { $ne: HISTORICAL_RECONCILIATION_SOURCE };
+    }
     if (query.level) {
       const level = await this.access.requireLevel(query.level, userId);
       topicIds = (
