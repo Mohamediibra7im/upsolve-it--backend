@@ -15,14 +15,29 @@ export async function inspectXpBalances(
   session?: mongo.ClientSession,
 ): Promise<Snapshot[]> {
   const results: Snapshot[] = [];
-  for (const balance of await connection
+  const candidates = await connection
     .collection('user_xp')
-    .find({}, { session })
-    .toArray()) {
-    const ledger = await connection
-      .collection('xp_transactions')
-      .find({ userId: balance.userId }, { session })
-      .toArray();
+    .aggregate<
+      mongo.WithId<mongo.Document> & { ledger: mongo.WithId<mongo.Document>[] }
+    >(
+      [
+        {
+          $lookup: {
+            from: 'xp_transactions',
+            localField: 'userId',
+            foreignField: 'userId',
+            as: 'ledger',
+          },
+        },
+        {
+          $match: { $expr: { $ne: ['$totalXp', { $sum: '$ledger.amount' }] } },
+        },
+      ],
+      { session },
+    )
+    .toArray();
+  for (const candidate of candidates) {
+    const { ledger, ...balance } = candidate;
     if (
       !Number.isSafeInteger(balance.totalXp) ||
       balance.totalXp < 0 ||
