@@ -20,7 +20,7 @@
 
 The full API specification is available via Swagger. When the backend is running, you can access the interactive documentation directly at:
 
-- **Direct**: `https://api.upsolve-it.hnuicpc.tech` (Root access)
+- **Direct**: `https://upsolve-it-backend.fly.dev/docs`
 
 ## 📡 Key Modules
 
