@@ -822,7 +822,7 @@ export class AdminService {
     const target = await this.userModel.findById(targetUserId);
     if (!target) throw new NotFoundException('User not found');
 
-    await this.userModel.findByIdAndUpdate(targetUserId, { locked: true });
+    await this.auth.setAccountLocked(targetUserId, true);
     await this.auditLogs.logAction(
       'LOCK_USER',
       'User',
@@ -838,7 +838,7 @@ export class AdminService {
     const target = await this.userModel.findById(targetUserId);
     if (!target) throw new NotFoundException('User not found');
 
-    await this.userModel.findByIdAndUpdate(targetUserId, { locked: false });
+    await this.auth.setAccountLocked(targetUserId, false);
     await this.auditLogs.logAction(
       'UNLOCK_USER',
       'User',

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -20,8 +21,9 @@ import { computeSessionPerformance } from './utils/session-performance';
 import { UserStatsService } from '../user-stats/user-stats.service';
 import { UpsolveService } from '../upsolve/upsolve.service';
 import { topWeakTags, type TagAgg } from './utils/weakness';
-import { isProblemMarkedSolved } from './utils/problem-solved';
+import { isProblemMarkedSolved, toPlainProblem } from './utils/problem-solved';
 import { ensureProblemIds, makeProblemId } from './utils/problem-ids';
+import { TransactionsService } from '../../common/database/transactions.module';
 
 @Injectable()
 export class TrainingSessionsService {
@@ -31,6 +33,7 @@ export class TrainingSessionsService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly userStats: UserStatsService,
     private readonly upsolve: UpsolveService,
+    private readonly transactions: TransactionsService,
   ) {}
 
   async createSession(userId: string, body: CreateTrainingDto) {
@@ -81,17 +84,21 @@ export class TrainingSessionsService {
     problemId: string,
     atMs?: number,
   ) {
-    const session = await this.requireOwnedSession(userId, sessionId);
-    const now = atMs ?? Date.now();
-    const idx = session.problems.findIndex((p) => p.problemId === problemId);
-    if (idx < 0) throw new BadRequestException('Unknown problem');
-    if (session.problems[idx].startedAt != null) {
+    return this.transactions.run(async () => {
+      const session = await this.requireOwnedSession(userId, sessionId);
+      if (session.status !== 'active')
+        throw new ConflictException('Session is not active');
+      const now = atMs ?? Date.now();
+      const idx = session.problems.findIndex((p) => p.problemId === problemId);
+      if (idx < 0) throw new BadRequestException('Unknown problem');
+      if (session.problems[idx].startedAt != null) {
+        return session;
+      }
+      session.problems[idx].startedAt = now;
+      session.markModified('problems');
+      await session.save();
       return session;
-    }
-    session.problems[idx].startedAt = now;
-    session.markModified('problems');
-    await session.save();
-    return session;
+    });
   }
 
   async syncSession(
@@ -99,16 +106,59 @@ export class TrainingSessionsService {
     sessionId: string,
     body: { problemUpdates?: Record<string, Partial<TrainingProblemStored>> },
   ) {
-    const session = await this.requireOwnedSession(userId, sessionId);
-    const updates = body.problemUpdates ?? {};
-    for (const p of session.problems) {
-      const u = updates[p.problemId];
-      if (!u) continue;
-      Object.assign(p, this.mergeProblemSync(session, p, u));
+    return this.transactions.run(async () => {
+      const session = await this.requireOwnedSession(userId, sessionId);
+      if (session.status !== 'active')
+        throw new ConflictException('Session is not active');
+      this.validateUpdates(body.problemUpdates);
+      const updates = body.problemUpdates ?? {};
+      for (const p of session.problems) {
+        const u = updates[p.problemId];
+        if (!u) continue;
+        Object.assign(p, this.mergeProblemSync(session, p, u));
+      }
+      session.markModified('problems');
+      await session.save();
+      return session;
+    });
+  }
+
+  private validateUpdates(
+    updates?: Record<string, Partial<TrainingProblemStored>>,
+  ) {
+    if (updates === undefined) return;
+    if (!updates || typeof updates !== 'object' || Array.isArray(updates))
+      throw new BadRequestException('Invalid problem updates');
+    const numeric = [
+      'startedAt',
+      'solvedAt',
+      'solvedTime',
+      'timeSpentSeconds',
+      'attempts',
+      'expectedTimeSeconds',
+    ];
+    for (const value of Object.values(updates)) {
+      if (!value || typeof value !== 'object' || Array.isArray(value))
+        throw new BadRequestException('Invalid problem update');
+      for (const [key, item] of Object.entries(value)) {
+        if (key === 'isSolved') {
+          if (typeof item !== 'boolean')
+            throw new BadRequestException('isSolved must be boolean');
+        } else if (key === 'speedStatus') {
+          if (!['fast', 'normal', 'slow', 'unsolved'].includes(String(item)))
+            throw new BadRequestException('Invalid speed status');
+        } else if (
+          !numeric.includes(key) ||
+          (item !== null &&
+            (typeof item !== 'number' ||
+              !Number.isFinite(item) ||
+              item < 0 ||
+              (key === 'attempts' && !Number.isInteger(item))))
+        ) {
+          throw new BadRequestException('Invalid problem update field');
+        }
+      }
     }
-    session.markModified('problems');
-    await session.save();
-    return session;
   }
 
   private mergeProblemSync(
@@ -135,8 +185,8 @@ export class TrainingSessionsService {
     }
     const speed = computeSpeedStatus(Boolean(isSolved), timeSpent, expected);
     return {
-      ...current,
-      ...incoming,
+      ...(toPlainProblem(current) as TrainingProblemStored),
+      startedAt: start,
       attempts,
       isSolved,
       solvedAt: solvedAt ?? undefined,
@@ -155,97 +205,110 @@ export class TrainingSessionsService {
       problemUpdates?: Record<string, Partial<TrainingProblemStored>>;
     },
   ) {
-    const user = await this.userModel.findById(userId);
-    if (!user) throw new NotFoundException('User not found');
-    const userRating = user.rating ?? 1500;
+    return this.transactions.run(async () => {
+      const user = await this.userModel.findById(userId);
+      if (!user) throw new NotFoundException('User not found');
+      const userRating = user.rating ?? 1500;
 
-    const session = await this.requireOwnedSession(userId, sessionId);
-    const endTime = body.endTime ?? Date.now();
-    session.endTime = endTime;
+      const session = await this.requireOwnedSession(userId, sessionId);
+      if (session.status === 'completed') return session;
+      if (session.status !== 'active')
+        throw new ConflictException('Session is not active');
+      this.validateUpdates(body.problemUpdates);
+      const endTime = body.endTime ?? Date.now();
+      if (!Number.isFinite(endTime) || endTime < session.startTime)
+        throw new BadRequestException('Invalid end time');
+      session.endTime = endTime;
 
-    const updates = body.problemUpdates ?? {};
-    for (const p of session.problems) {
-      const u = updates[p.problemId];
-      let next: TrainingProblemStored = { ...p };
-      if (u) {
-        next = this.mergeProblemSync(session, p, u);
+      const updates = body.problemUpdates ?? {};
+      for (const p of session.problems) {
+        const u = updates[p.problemId];
+        let next = toPlainProblem(p) as TrainingProblemStored;
+        if (u) {
+          next = this.mergeProblemSync(session, p, u);
+        }
+        next = this.finalizeProblem(session, next);
+        const insight = buildInsightAndRecommendation({
+          isSolved: isProblemMarkedSolved(next),
+          speedStatus: (next.speedStatus as SpeedStatus) ?? 'unsolved',
+          problemRating: next.rating ?? 0,
+          userRating,
+          attempts: next.attempts ?? 0,
+        });
+        next.insightMessage = insight.insightMessage;
+        next.recommendation = insight.recommendation;
+        Object.assign(p, next);
       }
-      next = this.finalizeProblem(session, next);
-      const insight = buildInsightAndRecommendation({
-        isSolved: isProblemMarkedSolved(next),
-        speedStatus: (next.speedStatus as SpeedStatus) ?? 'unsolved',
-        problemRating: next.rating ?? 0,
-        userRating,
-        attempts: next.attempts ?? 0,
-      });
-      next.insightMessage = insight.insightMessage;
-      next.recommendation = insight.recommendation;
-      Object.assign(p, next);
-    }
 
-    session.solvedCount = session.problems.filter(isProblemMarkedSolved).length;
-    // ponytail: 0-solve sessions get neutral performance (user's rating).
-    // computeSessionPerformance penalizes unsolved problems and produces
-    // ~600 for 0 solves, which drags down averages on abandoned sessions.
-    if (session.solvedCount === 0) {
-      session.performance = userRating;
-    } else {
-      session.performance = computeSessionPerformance(
-        {
-          startTime: session.startTime,
-          endTime: session.endTime,
-          customRatings: session.customRatings,
-          problems: session.problems,
-        },
-        userRating,
-      );
-    }
-    session.status = 'completed';
-    session.reviewGenerated = true;
-
-    // ponytail: contest modes use incremental (delta) time, not CF cumulative.
-    // Each problem's time = time since previous AC (or session start for first).
-    if (['ladder', 'contest'].includes(session.trainingMode)) {
-      let prev = session.startTime;
-      const solved = session.problems
-        .filter((p) => isProblemMarkedSolved(p) && p.solvedAt != null)
-        .sort((a, b) => (a.solvedAt ?? 0) - (b.solvedAt ?? 0));
-      for (const p of solved) {
-        const incremental = Math.max(
-          0,
-          Math.round(((p.solvedAt ?? prev) - prev) / 1000),
+      session.solvedCount = session.problems.filter(
+        isProblemMarkedSolved,
+      ).length;
+      // ponytail: 0-solve sessions get neutral performance (user's rating).
+      // computeSessionPerformance penalizes unsolved problems and produces
+      // ~600 for 0 solves, which drags down averages on abandoned sessions.
+      if (session.solvedCount === 0) {
+        session.performance = userRating;
+      } else {
+        session.performance = computeSessionPerformance(
+          {
+            startTime: session.startTime,
+            endTime: session.endTime,
+            customRatings: session.customRatings,
+            problems: session.problems,
+          },
+          userRating,
         );
-        p.timeSpentSeconds = incremental;
-        p.speedStatus = computeSpeedStatus(
-          true,
-          incremental,
-          p.expectedTimeSeconds ?? expectedTimeSecondsFromRating(p.rating ?? 0),
-        );
-        prev = p.solvedAt ?? prev;
       }
-    }
+      session.status = 'completed';
+      session.reviewGenerated = true;
 
-    session.markModified('problems');
-    await session.save();
+      // ponytail: contest modes use incremental (delta) time, not CF cumulative.
+      // Each problem's time = time since previous AC (or session start for first).
+      if (['ladder', 'contest'].includes(session.trainingMode)) {
+        let prev = session.startTime;
+        const solved = session.problems
+          .filter((p) => isProblemMarkedSolved(p) && p.solvedAt != null)
+          .sort((a, b) => (a.solvedAt ?? 0) - (b.solvedAt ?? 0));
+        for (const p of solved) {
+          const incremental = Math.max(
+            0,
+            Math.round(((p.solvedAt ?? prev) - prev) / 1000),
+          );
+          p.timeSpentSeconds = incremental;
+          p.speedStatus = computeSpeedStatus(
+            true,
+            incremental,
+            p.expectedTimeSeconds ??
+              expectedTimeSecondsFromRating(p.rating ?? 0),
+          );
+          prev = p.solvedAt ?? prev;
+        }
+      }
 
-    const unsolved = session.problems.filter((p) => !isProblemMarkedSolved(p));
-    if (unsolved.length > 0) {
-      await this.upsolve.insertMany(
-        userId,
-        unsolved.map((p) => ({
-          contestId: p.contestId,
-          index: p.index,
-          name: p.name,
-          rating: p.rating,
-          tags: p.tags,
-          url: p.url,
-          solvedTime: null,
-        })),
+      session.markModified('problems');
+      await session.save();
+
+      const unsolved = session.problems.filter(
+        (p) => !isProblemMarkedSolved(p),
       );
-    }
+      if (unsolved.length > 0) {
+        await this.upsolve.insertMany(
+          userId,
+          unsolved.map((p) => ({
+            contestId: p.contestId,
+            index: p.index,
+            name: p.name,
+            rating: p.rating,
+            tags: p.tags,
+            url: p.url,
+            solvedTime: null,
+          })),
+        );
+      }
 
-    await this.userStats.recordTrainingCompleted(userId, endTime);
-    return session;
+      await this.userStats.recordTrainingCompleted(userId, endTime);
+      return session;
+    });
   }
 
   private finalizeProblem(

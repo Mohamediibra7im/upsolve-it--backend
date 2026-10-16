@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Types, SchemaTypes } from 'mongoose';
 
 export type DismissedUpsolveDocument = HydratedDocument<DismissedUpsolve>;
 
@@ -15,7 +15,7 @@ export type DismissedUpsolveDocument = HydratedDocument<DismissedUpsolve>;
  */
 @Schema({ timestamps: false })
 export class DismissedUpsolve {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   user!: Types.ObjectId;
 
   @Prop({ required: true })

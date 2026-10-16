@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Types, SchemaTypes } from 'mongoose';
 
 export type RoadmapLevelDocument = HydratedDocument<RoadmapLevel>;
 
@@ -20,7 +20,7 @@ export class RoadmapLevel {
   @Prop({ type: String, enum: ['all', 'specific_users'], default: 'all' })
   visibility!: 'all' | 'specific_users';
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
+  @Prop({ type: [{ type: SchemaTypes.ObjectId, ref: 'User' }], default: [] })
   allowedUserIds!: Types.ObjectId[];
 
   @Prop({ default: 500 })

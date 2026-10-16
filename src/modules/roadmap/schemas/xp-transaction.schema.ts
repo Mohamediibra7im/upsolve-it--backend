@@ -1,11 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Types, SchemaTypes } from 'mongoose';
 
 export type XpTransactionDocument = HydratedDocument<XpTransaction>;
 
 @Schema({ collection: 'xp_transactions', timestamps: true })
 export class XpTransaction {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   userId!: Types.ObjectId;
 
   @Prop({ type: Number, required: true })
@@ -17,7 +17,7 @@ export class XpTransaction {
   @Prop({ type: String, required: true })
   sourceType!: string;
 
-  @Prop({ type: Types.ObjectId, required: true })
+  @Prop({ type: SchemaTypes.ObjectId, required: true })
   sourceId!: Types.ObjectId;
 }
 

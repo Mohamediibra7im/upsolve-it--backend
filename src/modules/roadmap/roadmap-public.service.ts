@@ -31,6 +31,7 @@ import {
   UserTopicProgress,
   UserTopicProgressDocument,
 } from './schemas/user-topic-progress.schema';
+import { RoadmapAccessService } from './roadmap-access.service';
 import { computeLearningPct } from './utils/learning-progress';
 
 export type TopicProgressSnapshot = {
@@ -43,6 +44,7 @@ export type TopicProgressSnapshot = {
 export class RoadmapPublicService {
   constructor(
     private readonly auth: AuthService,
+    private readonly access: RoadmapAccessService,
     @InjectModel(RoadmapLevel.name)
     private readonly levelModel: Model<RoadmapLevelDocument>,
     @InjectModel(RoadmapTopic.name)
@@ -180,19 +182,7 @@ export class RoadmapPublicService {
   }
 
   async getLevelDetail(levelId: string, userId: string | null) {
-    const level = await this.levelModel
-      .findOne({ _id: this.toObjectId(levelId, 'Level'), isPublished: true })
-      .lean();
-    if (!level) throw new NotFoundException('Level not found');
-
-    if (level.visibility === 'specific_users') {
-      const isAdmin = await this.isUserAdmin(userId);
-      if (!isAdmin) {
-        const hasAccess =
-          userId && level.allowedUserIds?.some((id) => String(id) === userId);
-        if (!hasAccess) throw new NotFoundException('Level not found');
-      }
-    }
+    const level = await this.access.requireLevel(levelId, userId);
 
     const topics = await this.topicModel
       .find({ levelId: level._id })
@@ -259,19 +249,7 @@ export class RoadmapPublicService {
     userId: string | null,
     language?: 'Arabic' | 'English',
   ) {
-    const level = await this.levelModel
-      .findOne({ _id: this.toObjectId(levelId, 'Level'), isPublished: true })
-      .lean();
-    if (!level) throw new NotFoundException('Level not found');
-
-    if (level.visibility === 'specific_users') {
-      const isAdmin = await this.isUserAdmin(userId);
-      if (!isAdmin) {
-        const hasAccess =
-          userId && level.allowedUserIds?.some((id) => String(id) === userId);
-        if (!hasAccess) throw new NotFoundException('Level not found');
-      }
-    }
+    const level = await this.access.requireLevel(levelId, userId);
 
     const topic = await this.topicModel
       .findOne({ _id: this.toObjectId(topicId, 'Topic'), levelId: level._id })

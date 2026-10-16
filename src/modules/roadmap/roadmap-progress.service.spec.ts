@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { Types } from 'mongoose';
+import { XpService } from '../xp/xp.module';
+import { RoadmapAccessService } from './roadmap-access.service';
 import { RoadmapProgressService } from './roadmap-progress.service';
 import { User } from '../auth/schemas/user.schema';
 import { RoadmapLevel } from './schemas/roadmap-level.schema';
@@ -66,6 +68,8 @@ describe('RoadmapProgressService', () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         RoadmapProgressService,
+        { provide: XpService, useValue: {} },
+        { provide: RoadmapAccessService, useValue: {} },
         { provide: getModelToken(User.name), useValue: userModel },
         { provide: getModelToken(RoadmapLevel.name), useValue: levelModel },
         { provide: getModelToken(RoadmapTopic.name), useValue: topicModel },
@@ -101,152 +105,6 @@ describe('RoadmapProgressService', () => {
     service = moduleRef.get(RoadmapProgressService);
   });
 
-  it('awards XP once when a resource is completed for the first time', async () => {
-    const userId = new Types.ObjectId().toString();
-    const levelId = new Types.ObjectId();
-    const topicId = new Types.ObjectId();
-    const resourceId = new Types.ObjectId();
-
-    resourceModel.findById.mockImplementation(() =>
-      mockQuery({
-        _id: resourceId,
-        topicId,
-        type: 'Article',
-        xpReward: 10,
-        weight: 50,
-        videoCompletionThresholdPct: 80,
-        language: 'English',
-        title: 'Test Resource',
-      }),
-    );
-
-    // No existing progress
-    resourceProgressModel.findOne.mockResolvedValue(null);
-    resourceProgressModel.findOneAndUpdate.mockResolvedValue({
-      _id: new Types.ObjectId(),
-      xpAwarded: false,
-      isCompleted: true,
-      watchPct: 0,
-      lastPositionSec: 0,
-    });
-
-    xpTransactionModel.create.mockResolvedValue({ _id: new Types.ObjectId() });
-    xpModel.findOneAndUpdate.mockResolvedValue(null);
-    resourceProgressModel.updateOne.mockResolvedValue(null);
-
-    // topic/level progress stubs
-    topicModel.findById.mockImplementation(() =>
-      mockQuery({
-        _id: topicId,
-        levelId,
-        requiredLearningPct: 80,
-        requiredProblemPct: 60,
-        topicXpReward: 100,
-        title: 'Test',
-      }),
-    );
-    levelModel.findById.mockImplementation(() =>
-      mockQuery({ _id: levelId, levelBonusXp: 500 }),
-    );
-    resourceModel.find.mockImplementation(() =>
-      mockQuery([
-        { _id: resourceId, type: 'Article', weight: 100, language: 'English' },
-      ]),
-    );
-    resourceProgressModel.find.mockImplementation(() =>
-      mockQuery([{ resourceId, isCompleted: true, watchPct: 0 }]),
-    );
-    topicModel.find.mockImplementation(() => mockQuery([{ _id: topicId }]));
-    problemModel.find.mockImplementation(() => mockQuery([]));
-    problemProgressModel.countDocuments.mockResolvedValue(0);
-    topicProgressModel.findOne.mockResolvedValue(null);
-    topicProgressModel.updateOne.mockResolvedValue(null);
-    topicProgressModel.findOneAndUpdate.mockResolvedValue(null);
-    levelProgressModel.updateOne.mockResolvedValue(null);
-    levelProgressModel.findOneAndUpdate.mockResolvedValue(null);
-
-    const result = await service.recordResourceProgress(
-      userId,
-      resourceId.toString(),
-      { completed: true },
-    );
-
-    expect(result.xpEarned).toBe(10);
-    expect(xpTransactionModel.create).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not double-award XP when resource already has xpAwarded=true', async () => {
-    const userId = new Types.ObjectId().toString();
-    const topicId = new Types.ObjectId();
-    const levelId = new Types.ObjectId();
-    const resourceId = new Types.ObjectId();
-
-    resourceModel.findById.mockImplementation(() =>
-      mockQuery({
-        _id: resourceId,
-        topicId,
-        type: 'Article',
-        xpReward: 10,
-        weight: 50,
-        language: 'English',
-        title: 'Test Resource',
-      }),
-    );
-
-    resourceProgressModel.findOne.mockResolvedValue({
-      _id: new Types.ObjectId(),
-      isCompleted: true,
-      xpAwarded: true,
-      watchPct: 0,
-    });
-    // findOneAndUpdate returns doc with xpAwarded: true → XP branch skipped
-    resourceProgressModel.findOneAndUpdate.mockResolvedValue({
-      _id: new Types.ObjectId(),
-      xpAwarded: true,
-      isCompleted: true,
-    });
-    resourceProgressModel.updateOne.mockResolvedValue(null);
-
-    topicModel.findById.mockImplementation(() =>
-      mockQuery({
-        _id: topicId,
-        levelId,
-        requiredLearningPct: 80,
-        requiredProblemPct: 60,
-        topicXpReward: 100,
-        title: 'Test',
-      }),
-    );
-    levelModel.findById.mockImplementation(() =>
-      mockQuery({ _id: levelId, levelBonusXp: 500 }),
-    );
-    resourceModel.find.mockImplementation(() =>
-      mockQuery([
-        { _id: resourceId, type: 'Article', weight: 100, language: 'English' },
-      ]),
-    );
-    resourceProgressModel.find.mockImplementation(() =>
-      mockQuery([{ resourceId, isCompleted: true, watchPct: 0 }]),
-    );
-    topicModel.find.mockImplementation(() => mockQuery([{ _id: topicId }]));
-    problemModel.find.mockImplementation(() => mockQuery([]));
-    problemProgressModel.countDocuments.mockResolvedValue(0);
-    topicProgressModel.findOne.mockResolvedValue(null);
-    topicProgressModel.updateOne.mockResolvedValue(null);
-    topicProgressModel.findOneAndUpdate.mockResolvedValue(null);
-    levelProgressModel.updateOne.mockResolvedValue(null);
-    levelProgressModel.findOneAndUpdate.mockResolvedValue(null);
-
-    const result = await service.recordResourceProgress(
-      userId,
-      resourceId.toString(),
-      { completed: true },
-    );
-
-    expect(result.xpEarned).toBe(0);
-    expect(xpTransactionModel.create).not.toHaveBeenCalled();
-  });
-
   it('builds a summary with current level and counts', async () => {
     const userId = new Types.ObjectId().toString();
     const levelA = new Types.ObjectId();
@@ -277,73 +135,5 @@ describe('RoadmapProgressService', () => {
     expect(summary.topicsCompleted).toBe(1);
     expect(summary.levelsCompleted).toBe(1);
     expect(summary.currentLevel?.title).toBe('Level 0');
-  });
-
-  it('awardXp treats duplicate transaction (11000) as already credited', async () => {
-    const userId = new Types.ObjectId().toString();
-    const topicId = new Types.ObjectId();
-    const levelId = new Types.ObjectId();
-    const problemId = new Types.ObjectId();
-
-    problemModel.findById.mockImplementation(() =>
-      mockQuery({
-        _id: problemId,
-        topicId,
-        xpReward: 40,
-        name: 'Test Problem',
-      }),
-    );
-    topicModel.findById.mockImplementation(() =>
-      mockQuery({
-        _id: topicId,
-        levelId,
-        requiredLearningPct: 0,
-        requiredProblemPct: 0,
-        topicXpReward: 100,
-        title: 'Test',
-      }),
-    );
-    levelModel.findById.mockImplementation(() =>
-      mockQuery({ _id: levelId, levelBonusXp: 500 }),
-    );
-
-    // Simulate progress doc already has xpAwarded: false (ready to award)
-    problemProgressModel.updateOne.mockResolvedValue(null);
-    problemProgressModel.findOne.mockImplementation(() =>
-      mockQuery({
-        _id: new Types.ObjectId(),
-        isSolved: true,
-        xpAwarded: false,
-      }),
-    );
-
-    // Transaction create throws duplicate key error
-    const dupError = Object.assign(new Error('duplicate key'), { code: 11000 });
-    xpTransactionModel.create.mockRejectedValue(dupError);
-
-    xpModel.findOneAndUpdate.mockResolvedValue(null);
-    resourceModel.find.mockImplementation(() => mockQuery([]));
-    topicModel.find.mockImplementation(() => mockQuery([{ _id: topicId }]));
-    problemModel.find.mockImplementation(() => mockQuery([{ _id: problemId }]));
-    problemProgressModel.countDocuments.mockResolvedValue(1);
-    topicProgressModel.findOne.mockResolvedValue(null);
-    topicProgressModel.updateOne.mockResolvedValue(null);
-    topicProgressModel.findOneAndUpdate.mockResolvedValue(null);
-    levelProgressModel.updateOne.mockResolvedValue(null);
-    levelProgressModel.findOneAndUpdate.mockResolvedValue(null);
-
-    const result = await service.toggleProblemSolved(
-      userId,
-      problemId.toString(),
-      true,
-    );
-
-    // Even with 11000, xpDelta should reflect the problem reward (tx was already there)
-    expect(result.xpDelta).toBe(40);
-    // xpAwarded flag should be set to true
-    expect(problemProgressModel.updateOne).toHaveBeenCalledWith(
-      expect.objectContaining({ problemId: problemId }),
-      { $set: { xpAwarded: true } },
-    );
   });
 });

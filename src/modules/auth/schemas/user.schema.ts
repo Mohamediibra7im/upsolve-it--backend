@@ -46,6 +46,9 @@ export class User {
 
   @Prop({ default: false })
   locked!: boolean;
+
+  @Prop({ default: 0 })
+  authVersion!: number;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

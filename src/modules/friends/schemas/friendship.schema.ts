@@ -1,16 +1,26 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Types, SchemaTypes } from 'mongoose';
 
 export type FriendshipDocument = HydratedDocument<Friendship>;
 
 @Schema({ timestamps: true })
 export class Friendship {
   /** Lexicographically smaller user ObjectId hex among the pair */
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
+  @Prop({
+    type: SchemaTypes.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true,
+  })
   userLower!: Types.ObjectId;
 
   /** Lexicographically larger user ObjectId hex among the pair */
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
+  @Prop({
+    type: SchemaTypes.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true,
+  })
   userHigher!: Types.ObjectId;
 }
 

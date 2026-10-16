@@ -1,14 +1,14 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Types, SchemaTypes } from 'mongoose';
 
 export type UserLevelProgressDocument = HydratedDocument<UserLevelProgress>;
 
 @Schema({ collection: 'user_level_progress', timestamps: true })
 export class UserLevelProgress {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   userId!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'RoadmapLevel', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'RoadmapLevel', required: true })
   levelId!: Types.ObjectId;
 
   @Prop({ type: Number, default: 0 })

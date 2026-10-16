@@ -4,27 +4,32 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { XpModule } from '../xp/xp.module';
+import { TransactionsModule } from '../../common/database/transactions.module';
+import {
+  PasswordResetChallenge,
+  PasswordResetChallengeSchema,
+} from './schemas/password-reset-challenge.schema';
 import {
   RefreshToken,
   RefreshTokenSchema,
 } from './schemas/refresh-token.schema';
 import { User, UserSchema } from './schemas/user.schema';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
-import { UserXp, UserXpSchema } from '../roadmap/schemas/user-xp.schema';
-import {
-  XpTransaction,
-  XpTransactionSchema,
-} from '../roadmap/schemas/xp-transaction.schema';
 
 @Module({
   imports: [
     ConfigModule,
+    TransactionsModule,
+    XpModule,
     AuditLogsModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
+      {
+        name: PasswordResetChallenge.name,
+        schema: PasswordResetChallengeSchema,
+      },
       { name: RefreshToken.name, schema: RefreshTokenSchema },
-      { name: UserXp.name, schema: UserXpSchema },
-      { name: XpTransaction.name, schema: XpTransactionSchema },
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],

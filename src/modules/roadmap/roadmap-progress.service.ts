@@ -46,6 +46,8 @@ import {
 import { ImportProblemsDto } from './dto/import-problems.dto';
 import { toUtcDayKey, addUtcDays } from '../trainings/utils/date-key';
 import { computeLearningPct } from './utils/learning-progress';
+import { XpService } from '../xp/xp.module';
+import { RoadmapAccessService } from './roadmap-access.service';
 
 const MAX_STATUS_COUNT = 1000;
 
@@ -78,19 +80,15 @@ export class RoadmapProgressService {
     @InjectModel(UserXp.name) private readonly xpModel: Model<UserXpDocument>,
     @InjectModel(XpTransaction.name)
     private readonly xpTransactionModel: Model<XpTransactionDocument>,
+    private readonly xp: XpService,
+    private readonly access: RoadmapAccessService,
   ) {}
 
-  private async revokeXp(
-    userId: Types.ObjectId,
-    amount: number,
-  ): Promise<void> {
-    const xpDoc = await this.xpModel
-      .findOne({ userId })
-      .select('totalXp')
-      .lean();
-    const current = xpDoc?.totalXp ?? 0;
-    const newTotal = Math.max(0, current - amount);
-    await this.xpModel.updateOne({ userId }, { $set: { totalXp: newTotal } });
+  private async requireTopicAccess(userId: string, topicId: Types.ObjectId) {
+    const topic = await this.topicModel.findById(topicId).lean();
+    if (!topic) throw new NotFoundException('Topic not found');
+    await this.access.requireLevel(topic.levelId, userId);
+    return topic;
   }
 
   private toObjectId(id: string, label: string): Types.ObjectId {
@@ -269,45 +267,14 @@ export class RoadmapProgressService {
     return solved;
   }
 
-  private async awardXp(
+  private awardXp(
     userId: string,
     amount: number,
     reason: string,
     sourceType: string,
     sourceId: Types.ObjectId,
-  ): Promise<number> {
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return 0;
-    }
-
-    try {
-      await this.xpTransactionModel.create({
-        userId: new Types.ObjectId(userId),
-        amount,
-        reason,
-        sourceType,
-        sourceId,
-      });
-    } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        (error as { code: number }).code === 11000
-      ) {
-        // Transaction already exists — XP was already credited. Treat as success
-        // so the caller can set the xpAwarded flag even if the write arrived late.
-        return amount;
-      }
-      throw error;
-    }
-
-    await this.xpModel.findOneAndUpdate(
-      { userId: new Types.ObjectId(userId) },
-      { $inc: { totalXp: amount } },
-      { upsert: true },
-    );
-    return amount;
+  ) {
+    return this.xp.award(userId, amount, reason, sourceType, sourceId);
   }
 
   private async ensureLevelProgress(userId: string, levelId: Types.ObjectId) {
@@ -376,9 +343,8 @@ export class RoadmapProgressService {
       sourceType,
       sourceId,
     );
-    if (earned > 0) {
+    if (amount > 0)
       await progressModel.updateOne(filter, { $set: { xpAwarded: true } });
-    }
     return earned;
   }
 
@@ -389,23 +355,11 @@ export class RoadmapProgressService {
     updateFields: Record<string, unknown>,
     sourceType: string,
     sourceId: Types.ObjectId,
-    xpAmount: number,
-  ): Promise<boolean> {
-    const claimed = await progressModel.findOneAndUpdate(
-      { ...findFilter, xpAwarded: true },
-      { $set: { ...updateFields, xpAwarded: false } },
-      { returnDocument: 'before' },
-    );
-    if (claimed) {
-      await this.xpTransactionModel.deleteOne({
-        userId,
-        sourceType,
-        sourceId,
-      });
-      await this.revokeXp(userId, xpAmount);
-      return true;
-    }
-    return false;
+  ): Promise<number> {
+    await progressModel.updateOne(findFilter, {
+      $set: { ...updateFields, xpAwarded: false },
+    });
+    return this.xp.revoke(userId, sourceType, sourceId);
   }
 
   private async updateTopicAndLevelProgress(
@@ -472,6 +426,13 @@ export class RoadmapProgressService {
 
     // Award Topic completion bonus XP (atomic claim to prevent TOCTOU race)
     let xpEarned = 0;
+    if (!isTopicComplete) {
+      xpEarned -= await this.xp.revoke(userOid, 'topic', topicId);
+      await this.topicProgressModel.updateOne(
+        { userId: userOid, topicId },
+        { $set: { topicBonusAwarded: false } },
+      );
+    }
     if (isTopicComplete) {
       const claimedTopicBonus = await this.topicProgressModel.findOneAndUpdate(
         { userId: userOid, topicId, topicBonusAwarded: false },
@@ -487,13 +448,6 @@ export class RoadmapProgressService {
           topicId,
         );
         xpEarned += bonus;
-        if (bonus === 0) {
-          // Transaction already existed — roll back the flag
-          await this.topicProgressModel.updateOne(
-            { _id: claimedTopicBonus._id },
-            { $set: { topicBonusAwarded: false } },
-          );
-        }
       }
     }
 
@@ -540,7 +494,14 @@ export class RoadmapProgressService {
       { upsert: true },
     );
 
-    // Award Level completion bonus XP (atomic claim to prevent TOCTOU race)
+    if (!isLevelComplete) {
+      xpEarned -= await this.xp.revoke(userOid, 'level', topic.levelId);
+      await this.levelProgressModel.updateOne(
+        { userId: userOid, levelId: topic.levelId },
+        { $set: { levelBonusAwarded: false } },
+      );
+    }
+    // Award Level completion bonus XP on the same transaction snapshot.
     if (isLevelComplete) {
       const claimedLevelBonus = await this.levelProgressModel.findOneAndUpdate(
         { userId: userOid, levelId: topic.levelId, levelBonusAwarded: false },
@@ -556,13 +517,6 @@ export class RoadmapProgressService {
           topic.levelId,
         );
         xpEarned += bonus;
-        if (bonus === 0) {
-          // Transaction already existed — roll back the flag
-          await this.levelProgressModel.updateOne(
-            { _id: claimedLevelBonus._id },
-            { $set: { levelBonusAwarded: false } },
-          );
-        }
       }
     }
 
@@ -576,104 +530,106 @@ export class RoadmapProgressService {
     resourceId: string,
     dto: { watchPct?: number; positionSec?: number; completed?: boolean },
   ) {
-    const resId = this.toObjectId(resourceId, 'Resource');
-    const resource = await this.resourceModel.findById(resId).lean();
-    if (!resource) throw new NotFoundException('Resource not found');
+    return this.xp.run(async () => {
+      const resId = this.toObjectId(resourceId, 'Resource');
+      const resource = await this.resourceModel.findById(resId).lean();
+      if (!resource) throw new NotFoundException('Resource not found');
+      await this.requireTopicAccess(userId, resource.topicId);
 
-    const userOid = new Types.ObjectId(userId);
+      const userOid = new Types.ObjectId(userId);
 
-    const existing = await this.resourceProgressModel.findOne({
-      userId: userOid,
-      resourceId: resId,
-    });
+      const existing = await this.resourceProgressModel.findOne({
+        userId: userOid,
+        resourceId: resId,
+      });
 
-    const watchPct = Math.min(
-      100,
-      Math.max(
-        existing?.watchPct ?? 0,
-        dto.watchPct ?? existing?.watchPct ?? 0,
-      ),
-    );
-    const lastPositionSec = Math.max(
-      0,
-      dto.positionSec ?? existing?.lastPositionSec ?? 0,
-    );
-
-    // Check completion
-    let isCompleted = false;
-    if (resource.type === 'Video') {
-      const threshold = resource.videoCompletionThresholdPct ?? 80;
-      isCompleted = watchPct >= threshold;
-    } else {
-      isCompleted = dto.completed ?? existing?.isCompleted ?? false;
-    }
-
-    const nextCompleted =
-      resource.type === 'Video'
-        ? existing?.isCompleted || isCompleted
-        : isCompleted;
-    const nextCompletedAt = nextCompleted
-      ? (existing?.completedAt ?? new Date())
-      : null;
-
-    const updated = await this.resourceProgressModel.findOneAndUpdate(
-      { userId: userOid, resourceId: resId },
-      {
-        $set: {
-          watchPct,
-          lastPositionSec,
-          isCompleted: nextCompleted,
-          completedAt: nextCompletedAt,
-        },
-        $setOnInsert: { xpAwarded: false },
-      },
-      { upsert: true, returnDocument: 'after' },
-    );
-
-    let xpEarned = 0;
-    if (nextCompleted && updated && !updated.xpAwarded) {
-      xpEarned = await this.awardXpAndMarkFlag(
-        userId,
-        resource.xpReward ?? 10,
-        `Completed resource ${resource.title}`,
-        'resource',
-        resId,
-        { _id: updated._id },
-        this.resourceProgressModel,
+      const watchPct = Math.min(
+        100,
+        Math.max(
+          existing?.watchPct ?? 0,
+          dto.watchPct ?? existing?.watchPct ?? 0,
+        ),
       );
-    } else if (!isCompleted && !nextCompleted) {
-      const revoked = await this.revokeXpIfAwarded(
-        userOid,
-        this.resourceProgressModel,
-        { userId: userOid, resourceId: resId },
-        { isCompleted: false, completedAt: null },
-        'resource',
-        resId,
-        resource.xpReward ?? 10,
+      const lastPositionSec = Math.max(
+        0,
+        dto.positionSec ?? existing?.lastPositionSec ?? 0,
       );
-      if (revoked) {
-        xpEarned = -(resource.xpReward ?? 10);
+
+      // Check completion
+      let isCompleted = false;
+      if (resource.type === 'Video') {
+        const threshold = resource.videoCompletionThresholdPct ?? 80;
+        isCompleted = watchPct >= threshold;
       } else {
-        await this.resourceProgressModel.updateOne(
-          { userId: userOid, resourceId: resId },
-          { $set: { isCompleted: false, completedAt: null } },
-        );
+        isCompleted = dto.completed ?? existing?.isCompleted ?? false;
       }
-    }
 
-    const progressUpdates = await this.updateTopicAndLevelProgress(
-      userId,
-      resource.topicId,
-      resource.language,
-    );
+      const nextCompleted =
+        resource.type === 'Video'
+          ? existing?.isCompleted || isCompleted
+          : isCompleted;
+      const nextCompletedAt = nextCompleted
+        ? (existing?.completedAt ?? new Date())
+        : null;
 
-    return {
-      isCompleted: nextCompleted,
-      watchPct,
-      lastPositionSec,
-      xpEarned: xpEarned + (progressUpdates?.xpEarned ?? 0),
-      learningPct: progressUpdates?.learningPct ?? 0,
-    };
+      const updated = await this.resourceProgressModel.findOneAndUpdate(
+        { userId: userOid, resourceId: resId },
+        {
+          $set: {
+            watchPct,
+            lastPositionSec,
+            isCompleted: nextCompleted,
+            completedAt: nextCompletedAt,
+          },
+          $setOnInsert: { xpAwarded: false },
+        },
+        { upsert: true, returnDocument: 'after' },
+      );
+
+      let xpEarned = 0;
+      if (nextCompleted && updated && !updated.xpAwarded) {
+        xpEarned = await this.awardXpAndMarkFlag(
+          userId,
+          resource.xpReward ?? 10,
+          `Completed resource ${resource.title}`,
+          'resource',
+          resId,
+          { _id: updated._id },
+          this.resourceProgressModel,
+        );
+      } else if (!isCompleted && !nextCompleted) {
+        const revoked = await this.revokeXpIfAwarded(
+          userOid,
+          this.resourceProgressModel,
+          { userId: userOid, resourceId: resId },
+          { isCompleted: false, completedAt: null },
+          'resource',
+          resId,
+        );
+        if (revoked) {
+          xpEarned = -revoked;
+        } else {
+          await this.resourceProgressModel.updateOne(
+            { userId: userOid, resourceId: resId },
+            { $set: { isCompleted: false, completedAt: null } },
+          );
+        }
+      }
+
+      const progressUpdates = await this.updateTopicAndLevelProgress(
+        userId,
+        resource.topicId,
+        resource.language,
+      );
+
+      return {
+        isCompleted: nextCompleted,
+        watchPct,
+        lastPositionSec,
+        xpEarned: xpEarned + (progressUpdates?.xpEarned ?? 0),
+        learningPct: progressUpdates?.learningPct ?? 0,
+      };
+    });
   }
 
   // === CODEFORCES SYNCING ===
@@ -684,8 +640,7 @@ export class RoadmapProgressService {
     language?: 'Arabic' | 'English',
   ) {
     const tId = this.toObjectId(topicId, 'Topic');
-    const topic = await this.topicModel.findById(tId).lean();
-    if (!topic) throw new NotFoundException('Topic not found');
+    const topic = await this.requireTopicAccess(userId, tId);
 
     await this.checkLearningGate(
       userId,
@@ -747,74 +702,85 @@ export class RoadmapProgressService {
       for (const key of statusSolved) solvedFromStatus.add(key);
     }
 
-    const problemIds = problems.map((p) => p._id);
-    const existing = await this.problemProgressModel
-      .find({
-        userId: new Types.ObjectId(userId),
-        problemId: { $in: problemIds },
-      })
-      .lean();
-    const existingMap = new Map(existing.map((p) => [String(p.problemId), p]));
+    return this.xp.run(async () => {
+      await this.requireTopicAccess(userId, tId);
+      await this.checkLearningGate(
+        userId,
+        tId,
+        language,
+        topic.requiredLearningPct,
+      );
+      const problemIds = problems.map((p) => p._id);
+      const existing = await this.problemProgressModel
+        .find({
+          userId: new Types.ObjectId(userId),
+          problemId: { $in: problemIds },
+        })
+        .lean();
+      const existingMap = new Map(
+        existing.map((p) => [String(p.problemId), p]),
+      );
 
-    const solvedProblemIds = new Set(
-      existing.filter((p) => p.isSolved).map((p) => String(p.problemId)),
-    );
+      const solvedProblemIds = new Set(
+        existing.filter((p) => p.isSolved).map((p) => String(p.problemId)),
+      );
 
-    const newlySolved: string[] = [];
-    let xpEarned = 0;
+      const newlySolved: string[] = [];
+      let xpEarned = 0;
 
-    for (const p of problems) {
-      const parsed = parsedByProblem.get(String(p._id));
-      if (!parsed) continue;
-      const key = `${parsed.contestId}_${parsed.index}`;
-      if (!solvedFromStatus.has(key)) continue;
+      for (const p of problems) {
+        const parsed = parsedByProblem.get(String(p._id));
+        if (!parsed) continue;
+        const key = `${parsed.contestId}_${parsed.index}`;
+        if (!solvedFromStatus.has(key)) continue;
 
-      const existingProgress = existingMap.get(String(p._id));
-      if (!existingProgress?.isSolved) {
-        newlySolved.push(String(p._id));
-        solvedProblemIds.add(String(p._id));
+        const existingProgress = existingMap.get(String(p._id));
+        if (!existingProgress?.isSolved) {
+          newlySolved.push(String(p._id));
+          solvedProblemIds.add(String(p._id));
 
-        await this.problemProgressModel.updateOne(
-          { userId: new Types.ObjectId(userId), problemId: p._id },
-          {
-            $set: { isSolved: true, solvedAt: new Date() },
-            $setOnInsert: { xpAwarded: false },
-          },
-          { upsert: true },
-        );
-
-        // Read xpAwarded state after upsert to avoid double-award
-        const prog = await this.problemProgressModel
-          .findOne({ userId: new Types.ObjectId(userId), problemId: p._id })
-          .lean();
-
-        if (!prog?.xpAwarded) {
-          xpEarned += await this.awardXpAndMarkFlag(
-            userId,
-            p.xpReward ?? 40,
-            `Solved ${p.name}`,
-            'problem',
-            p._id,
+          await this.problemProgressModel.updateOne(
             { userId: new Types.ObjectId(userId), problemId: p._id },
-            this.problemProgressModel,
+            {
+              $set: { isSolved: true, solvedAt: new Date() },
+              $setOnInsert: { xpAwarded: false },
+            },
+            { upsert: true },
           );
+
+          // Read xpAwarded state after upsert to avoid double-award
+          const prog = await this.problemProgressModel
+            .findOne({ userId: new Types.ObjectId(userId), problemId: p._id })
+            .lean();
+
+          if (!prog?.xpAwarded) {
+            xpEarned += await this.awardXpAndMarkFlag(
+              userId,
+              p.xpReward ?? 40,
+              `Solved ${p.name}`,
+              'problem',
+              p._id,
+              { userId: new Types.ObjectId(userId), problemId: p._id },
+              this.problemProgressModel,
+            );
+          }
         }
       }
-    }
 
-    const progressUpdates = await this.updateTopicAndLevelProgress(
-      userId,
-      tId,
-      language,
-    );
+      const progressUpdates = await this.updateTopicAndLevelProgress(
+        userId,
+        tId,
+        language,
+      );
 
-    return {
-      newlySolved,
-      xpEarned: xpEarned + (progressUpdates?.xpEarned ?? 0),
-      problemPct: progressUpdates?.problemPct ?? 0,
-      problemsSolved: solvedProblemIds.size,
-      totalProblems: problems.length,
-    };
+      return {
+        newlySolved,
+        xpEarned: xpEarned + (progressUpdates?.xpEarned ?? 0),
+        problemPct: progressUpdates?.problemPct ?? 0,
+        problemsSolved: solvedProblemIds.size,
+        totalProblems: problems.length,
+      };
+    });
   }
 
   // === MANUAL PROBLEM TOGGLING ===
@@ -825,99 +791,99 @@ export class RoadmapProgressService {
     solved: boolean,
     language?: 'Arabic' | 'English',
   ) {
-    const probOid = this.toObjectId(problemId, 'Problem');
-    const problem = await this.problemModel.findById(probOid).lean();
-    if (!problem) throw new NotFoundException('Problem not found');
+    return this.xp.run(async () => {
+      const probOid = this.toObjectId(problemId, 'Problem');
+      const problem = await this.problemModel.findById(probOid).lean();
+      if (!problem) throw new NotFoundException('Problem not found');
 
-    const topic = await this.topicModel.findById(problem.topicId).lean();
-    if (!topic) throw new NotFoundException('Topic not found');
+      const topic = await this.requireTopicAccess(userId, problem.topicId);
 
-    if (solved) {
-      await this.checkLearningGate(
+      if (solved) {
+        await this.checkLearningGate(
+          userId,
+          topic._id,
+          language,
+          topic.requiredLearningPct,
+        );
+      }
+
+      const userOid = new Types.ObjectId(userId);
+      let xpDelta = 0;
+
+      if (solved) {
+        // Upsert progress doc; only set xpAwarded=false for brand-new documents
+        await this.problemProgressModel.updateOne(
+          { userId: userOid, problemId: probOid },
+          {
+            $set: { isSolved: true, solvedAt: new Date() },
+            $setOnInsert: { xpAwarded: false },
+          },
+          { upsert: true },
+        );
+
+        // Read the current xpAwarded state after upsert
+        const prog = await this.problemProgressModel
+          .findOne({ userId: userOid, problemId: probOid })
+          .lean();
+
+        if (!prog?.xpAwarded) {
+          xpDelta = await this.awardXpAndMarkFlag(
+            userId,
+            problem.xpReward ?? 40,
+            `Solved ${problem.name}`,
+            'problem',
+            probOid,
+            { userId: userOid, problemId: probOid },
+            this.problemProgressModel,
+          );
+        }
+      } else {
+        const revoked = await this.revokeXpIfAwarded(
+          userOid,
+          this.problemProgressModel,
+          { userId: userOid, problemId: probOid },
+          { isSolved: false, solvedAt: null },
+          'problem',
+          probOid,
+        );
+        if (revoked) {
+          xpDelta = -revoked;
+        } else {
+          await this.problemProgressModel.updateOne(
+            { userId: userOid, problemId: probOid },
+            { $set: { isSolved: false, solvedAt: null } },
+          );
+        }
+      }
+
+      const progressUpdates = await this.updateTopicAndLevelProgress(
         userId,
         topic._id,
         language,
-        topic.requiredLearningPct,
-      );
-    }
-
-    const userOid = new Types.ObjectId(userId);
-    let xpDelta = 0;
-
-    if (solved) {
-      // Upsert progress doc; only set xpAwarded=false for brand-new documents
-      await this.problemProgressModel.updateOne(
-        { userId: userOid, problemId: probOid },
-        {
-          $set: { isSolved: true, solvedAt: new Date() },
-          $setOnInsert: { xpAwarded: false },
-        },
-        { upsert: true },
       );
 
-      // Read the current xpAwarded state after upsert
-      const prog = await this.problemProgressModel
-        .findOne({ userId: userOid, problemId: probOid })
+      const allTopicProblems = await this.problemModel
+        .find({ topicId: topic._id })
+        .select('_id')
         .lean();
+      const totalProblems = allTopicProblems.length;
+      const solvedProblemsCount = totalProblems
+        ? await this.problemProgressModel.countDocuments({
+            userId: userOid,
+            problemId: { $in: allTopicProblems.map((p) => p._id) },
+            isSolved: true,
+          })
+        : 0;
 
-      if (!prog?.xpAwarded) {
-        xpDelta = await this.awardXpAndMarkFlag(
-          userId,
-          problem.xpReward ?? 40,
-          `Solved ${problem.name}`,
-          'problem',
-          probOid,
-          { userId: userOid, problemId: probOid },
-          this.problemProgressModel,
-        );
-      }
-    } else {
-      const revoked = await this.revokeXpIfAwarded(
-        userOid,
-        this.problemProgressModel,
-        { userId: userOid, problemId: probOid },
-        { isSolved: false, solvedAt: null },
-        'problem',
-        probOid,
-        problem.xpReward ?? 40,
-      );
-      if (revoked) {
-        xpDelta = -(problem.xpReward ?? 40);
-      } else {
-        await this.problemProgressModel.updateOne(
-          { userId: userOid, problemId: probOid },
-          { $set: { isSolved: false, solvedAt: null } },
-        );
-      }
-    }
-
-    const progressUpdates = await this.updateTopicAndLevelProgress(
-      userId,
-      topic._id,
-      language,
-    );
-
-    const allTopicProblems = await this.problemModel
-      .find({ topicId: topic._id })
-      .select('_id')
-      .lean();
-    const totalProblems = allTopicProblems.length;
-    const solvedProblemsCount = totalProblems
-      ? await this.problemProgressModel.countDocuments({
-          userId: userOid,
-          problemId: { $in: allTopicProblems.map((p) => p._id) },
-          isSolved: true,
-        })
-      : 0;
-
-    return {
-      problemId,
-      isSolved: solved,
-      xpDelta: xpDelta + (progressUpdates?.xpEarned ?? 0),
-      problemPct: progressUpdates?.problemPct ?? 0,
-      problemsSolved: solvedProblemsCount,
-      totalProblems,
-    };
+      return {
+        problemId,
+        isSolved: solved,
+        xpDelta: xpDelta + (progressUpdates?.xpEarned ?? 0),
+        problemPct: progressUpdates?.problemPct ?? 0,
+        problemsSolved: solvedProblemsCount,
+        totalProblems,
+      };
+    });
   }
 
   // === USER SUMMARY & LEADERS ===
@@ -1033,114 +999,171 @@ export class RoadmapProgressService {
     },
     userId?: string,
   ) {
-    const pageSize = Math.min(parseInt(query.limit ?? '20', 10) || 20, 200);
-    const page = Math.max(parseInt(query.page ?? '1', 10) || 1, 1);
+    const number = (raw: string | undefined, fallback: number, max: number) => {
+      if (raw === undefined) return fallback;
+      if (
+        !/^\d+$/.test(raw) ||
+        Number(raw) < 1 ||
+        !Number.isSafeInteger(Number(raw)) ||
+        Number(raw) > max
+      )
+        throw new BadRequestException('Invalid pagination');
+      return Number(raw);
+    };
+    const pageSize = number(query.limit, 20, 200);
+    const page = number(query.page, 1, Number.MAX_SAFE_INTEGER);
     const skip = (page - 1) * pageSize;
-
-    // Run count, top3, paginated entries, and user's own XP in parallel
-    const [total, top3Docs, xpDocs, userXp] = await Promise.all([
-      this.xpModel.countDocuments({}),
-      this.xpModel.find({}).sort({ totalXp: -1 }).limit(3).lean(),
-      this.xpModel
-        .find({})
-        .sort({ totalXp: -1 })
-        .skip(skip)
-        .limit(pageSize)
-        .lean(),
-      userId
-        ? this.xpModel.findOne({ userId }).select('totalXp').lean()
-        : Promise.resolve(null),
-    ]);
-
-    const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
-
-    if (total === 0) {
-      return {
-        leaderboard: [],
-        top3: [],
-        total,
-        page,
-        pageSize,
-        totalPages,
-        myRank: null,
-      };
+    if (!Number.isSafeInteger(skip))
+      throw new BadRequestException('Invalid pagination');
+    const period = query.period ?? 'all';
+    if (!['all', 'weekly', 'monthly'].includes(period))
+      throw new BadRequestException('Invalid period');
+    let since: Date | undefined;
+    if (period !== 'all') {
+      const now = new Date();
+      since = new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          period === 'monthly' ? 1 : now.getUTCDate(),
+        ),
+      );
+      if (period === 'weekly')
+        since.setUTCDate(since.getUTCDate() - ((since.getUTCDay() + 6) % 7));
     }
-
-    // Collect all unique userIds from both top3 and current page
-    const allUserIds = [
-      ...new Set([
-        ...xpDocs.map((x) => x.userId),
-        ...top3Docs.map((x) => x.userId),
-      ]),
-    ];
-
-    // Run user lookups, aggregations, and rank calculation in parallel
-    const [users, topicCounts, problemCounts, higherCount] = await Promise.all([
-      this.userModel
-        .find({ _id: { $in: allUserIds } })
-        .select('codeforcesHandle avatar')
-        .lean(),
+    let topicIds: Types.ObjectId[] | undefined;
+    let problemIds: Types.ObjectId[] | undefined;
+    const match: Record<string, unknown> = {};
+    if (since) match.createdAt = { $gte: since, $lte: new Date() };
+    if (query.level) {
+      const level = await this.access.requireLevel(query.level, userId);
+      topicIds = (
+        await this.topicModel.find({ levelId: level._id }).select('_id').lean()
+      ).map((t) => t._id);
+      const resources = await this.resourceModel
+        .find({ topicId: { $in: topicIds } })
+        .select('_id')
+        .lean();
+      problemIds = (
+        await this.problemModel
+          .find({ topicId: { $in: topicIds } })
+          .select('_id')
+          .lean()
+      ).map((p) => p._id);
+      match.$or = [
+        { sourceType: 'level', sourceId: level._id },
+        { sourceType: 'topic', sourceId: { $in: topicIds } },
+        {
+          sourceType: 'resource',
+          sourceId: { $in: resources.map((r) => r._id) },
+        },
+        { sourceType: 'problem', sourceId: { $in: problemIds } },
+      ];
+    }
+    const filtered = !!since || !!query.level;
+    const pipeline: any[] = filtered
+      ? [
+          { $match: match },
+          { $group: { _id: '$userId', totalXp: { $sum: '$amount' } } },
+          { $project: { _id: 0, userId: '$_id', totalXp: 1 } },
+          { $match: { totalXp: { $gt: 0 } } },
+        ]
+      : [{ $project: { _id: 0, userId: 1, totalXp: 1 } }];
+    pipeline.push(
+      {
+        $lookup: {
+          from: this.userModel.collection.name,
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: '$user' },
+      {
+        $setWindowFields: {
+          sortBy: { totalXp: -1 },
+          output: { rank: { $rank: {} } },
+        },
+      },
+      {
+        $project: {
+          userId: 1,
+          totalXp: 1,
+          rank: 1,
+          handle: '$user.codeforcesHandle',
+          avatar: '$user.avatar',
+        },
+      },
+      {
+        $facet: {
+          leaderboard: [
+            { $sort: { totalXp: -1, userId: 1 } },
+            { $skip: skip },
+            { $limit: pageSize },
+          ],
+          top3: [{ $sort: { totalXp: -1, userId: 1 } }, { $limit: 3 }],
+          metadata: [{ $count: 'total' }],
+          mine: [
+            { $match: { userId: userId ? new Types.ObjectId(userId) : null } },
+            { $project: { rank: 1 } },
+          ],
+        },
+      },
+    );
+    const [result] = await (
+      filtered ? this.xpTransactionModel : this.xpModel
+    ).aggregate(pipeline);
+    const rows = [...result.leaderboard, ...result.top3] as Array<{
+      userId: Types.ObjectId;
+    }>;
+    const ids = rows.map((r) => r.userId);
+    const topicMatch: Record<string, unknown> = {
+      userId: { $in: ids },
+      isTopicComplete: true,
+    };
+    const problemMatch: Record<string, unknown> = {
+      userId: { $in: ids },
+      isSolved: true,
+    };
+    if (topicIds) topicMatch.topicId = { $in: topicIds };
+    if (problemIds) problemMatch.problemId = { $in: problemIds };
+    if (since) {
+      topicMatch.completedAt = { $gte: since, $lte: new Date() };
+      problemMatch.solvedAt = { $gte: since, $lte: new Date() };
+    }
+    const [topics, problems] = await Promise.all([
       this.topicProgressModel.aggregate([
-        { $match: { userId: { $in: allUserIds }, isTopicComplete: true } },
+        { $match: topicMatch },
         { $group: { _id: '$userId', count: { $sum: 1 } } },
       ]),
       this.problemProgressModel.aggregate([
-        { $match: { userId: { $in: allUserIds }, isSolved: true } },
+        { $match: problemMatch },
         { $group: { _id: '$userId', count: { $sum: 1 } } },
       ]),
-      userXp
-        ? this.xpModel.countDocuments({ totalXp: { $gt: userXp.totalXp } })
-        : Promise.resolve(null),
     ]);
-
-    const userMap = new Map(users.map((u) => [String(u._id), u]));
-    const topicMap = new Map<string, number>(
-      topicCounts.map((t: { _id: any; count: number }) => [
-        String(t._id),
-        t.count,
-      ]),
+    const topicCounts = new Map(
+      topics.map((t: any) => [String(t._id), t.count]),
     );
-    const problemMap = new Map<string, number>(
-      problemCounts.map((p: { _id: any; count: number }) => [
-        String(p._id),
-        p.count,
-      ]),
+    const problemCounts = new Map(
+      problems.map((p: any) => [String(p._id), p.count]),
     );
-
-    const buildEntry = (xp: { userId: any; totalXp: number }, rank: number) => {
-      const u = userMap.get(String(xp.userId));
-      if (!u) return null;
-      return {
-        userId: String(xp.userId),
-        handle: u.codeforcesHandle ?? 'Anonymous',
-        avatar: u.avatar || null,
-        totalXp: xp.totalXp,
-        topicsDone: topicMap.get(String(xp.userId)) ?? 0,
-        problemsSolved: problemMap.get(String(xp.userId)) ?? 0,
-        rank,
-      };
+    const entry = (r: any) => ({
+      ...r,
+      userId: String(r.userId),
+      avatar: r.avatar || null,
+      topicsDone: topicCounts.get(String(r.userId)) ?? 0,
+      problemsSolved: problemCounts.get(String(r.userId)) ?? 0,
+    });
+    const total = result.metadata[0]?.total ?? 0;
+    return {
+      leaderboard: result.leaderboard.map(entry),
+      top3: result.top3.map(entry),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+      myRank: result.mine[0]?.rank ?? null,
     };
-
-    // Build top3 with global ranks 1-3
-    const top3: any[] = [];
-    for (let i = 0; i < top3Docs.length; i++) {
-      const entry = buildEntry(top3Docs[i], i + 1);
-      if (entry) top3.push(entry);
-    }
-
-    // Build paginated leaderboard with correct global ranks
-    const leaderboard: any[] = [];
-    let rank = skip + 1;
-    for (const xp of xpDocs) {
-      const entry = buildEntry(xp, rank);
-      if (entry) leaderboard.push(entry);
-      rank++;
-    }
-
-    // Calculate current user's rank
-    const myRank = higherCount !== null ? higherCount + 1 : null;
-
-    return { leaderboard, top3, total, page, pageSize, totalPages, myRank };
   }
 
   private async getMaxOrderIndex(
@@ -1230,79 +1253,80 @@ export class RoadmapProgressService {
     topicId: string,
     language?: 'Arabic' | 'English',
   ) {
-    const tId = this.toObjectId(topicId, 'Topic');
-    const topic = await this.topicModel.findById(tId).lean();
-    if (!topic) throw new NotFoundException('Topic not found');
+    return this.xp.run(async () => {
+      const tId = this.toObjectId(topicId, 'Topic');
+      const topic = await this.requireTopicAccess(userId, tId);
 
-    await this.checkLearningGate(
-      userId,
-      tId,
-      language,
-      topic.requiredLearningPct,
-    );
-
-    const filter: Record<string, unknown> = { topicId: tId };
-    if (language) filter.language = language;
-    const resources = await this.resourceModel.find(filter).lean();
-    if (resources.length === 0)
-      return { ok: true, xpEarned: 0, learningPct: 100 };
-
-    const userOid = new Types.ObjectId(userId);
-    let xpEarned = 0;
-
-    for (const resource of resources) {
-      const existing = await this.resourceProgressModel
-        .findOne({ userId: userOid, resourceId: resource._id })
-        .lean();
-
-      // For videos: contribution = weight * (watchPct / 100), so we need watchPct=100.
-      // Skip only when the video is already fully watched.
-      // For non-video resources: skip only when already completed.
-      const alreadyDone =
-        resource.type === 'Video'
-          ? (existing?.watchPct ?? 0) >= 100
-          : existing?.isCompleted === true;
-
-      if (alreadyDone) continue;
-
-      const updated = await this.resourceProgressModel.findOneAndUpdate(
-        { userId: userOid, resourceId: resource._id },
-        {
-          $set: {
-            watchPct: 100,
-            isCompleted: true,
-            completedAt: existing?.completedAt ?? new Date(),
-          },
-          $setOnInsert: { xpAwarded: false, lastPositionSec: 0 },
-        },
-        { upsert: true, returnDocument: 'after' },
+      await this.checkLearningGate(
+        userId,
+        tId,
+        language,
+        topic.requiredLearningPct,
       );
 
-      if (updated && !updated.xpAwarded) {
-        xpEarned += await this.awardXpAndMarkFlag(
-          userId,
-          resource.xpReward ?? 10,
-          `Completed resource ${resource.title}`,
-          'resource',
-          resource._id,
-          { _id: updated._id },
-          this.resourceProgressModel,
+      const filter: Record<string, unknown> = { topicId: tId };
+      if (language) filter.language = language;
+      const resources = await this.resourceModel.find(filter).lean();
+      if (resources.length === 0)
+        return { ok: true, xpEarned: 0, learningPct: 100 };
+
+      const userOid = new Types.ObjectId(userId);
+      let xpEarned = 0;
+
+      for (const resource of resources) {
+        const existing = await this.resourceProgressModel
+          .findOne({ userId: userOid, resourceId: resource._id })
+          .lean();
+
+        // For videos: contribution = weight * (watchPct / 100), so we need watchPct=100.
+        // Skip only when the video is already fully watched.
+        // For non-video resources: skip only when already completed.
+        const alreadyDone =
+          resource.type === 'Video'
+            ? (existing?.watchPct ?? 0) >= 100
+            : existing?.isCompleted === true;
+
+        if (alreadyDone) continue;
+
+        const updated = await this.resourceProgressModel.findOneAndUpdate(
+          { userId: userOid, resourceId: resource._id },
+          {
+            $set: {
+              watchPct: 100,
+              isCompleted: true,
+              completedAt: existing?.completedAt ?? new Date(),
+            },
+            $setOnInsert: { xpAwarded: false, lastPositionSec: 0 },
+          },
+          { upsert: true, returnDocument: 'after' },
         );
+
+        if (updated && !updated.xpAwarded) {
+          xpEarned += await this.awardXpAndMarkFlag(
+            userId,
+            resource.xpReward ?? 10,
+            `Completed resource ${resource.title}`,
+            'resource',
+            resource._id,
+            { _id: updated._id },
+            this.resourceProgressModel,
+          );
+        }
       }
-    }
 
-    const progressUpdates = await this.updateTopicAndLevelProgress(
-      userId,
-      tId,
-      language,
-    );
+      const progressUpdates = await this.updateTopicAndLevelProgress(
+        userId,
+        tId,
+        language,
+      );
 
-    return {
-      ok: true,
-      xpEarned: xpEarned + (progressUpdates?.xpEarned ?? 0),
-      learningPct: progressUpdates?.learningPct ?? 100,
-      isTopicComplete: progressUpdates?.isTopicComplete ?? false,
-    };
+      return {
+        ok: true,
+        xpEarned: xpEarned + (progressUpdates?.xpEarned ?? 0),
+        learningPct: progressUpdates?.learningPct ?? 100,
+        isTopicComplete: progressUpdates?.isTopicComplete ?? false,
+      };
+    });
   }
 
   async resetTopicLearningProgress(
@@ -1310,139 +1334,39 @@ export class RoadmapProgressService {
     topicId: string,
     language?: 'Arabic' | 'English',
   ) {
-    const tId = this.toObjectId(topicId, 'Topic');
-    const uId = new Types.ObjectId(userId);
-
-    // Find resources (optionally filtered by language)
-    const filter: Record<string, unknown> = { topicId: tId };
-    if (language) filter.language = language;
-    const resources = await this.resourceModel.find(filter).lean();
-    const resourceIds = resources.map((r) => r._id);
-    if (resourceIds.length === 0) return { ok: true, xpRevoked: 0 };
-
-    // Find completed resources that awarded XP — accumulate revoke amount
-    const completedProgress = await this.resourceProgressModel
-      .find({
+    return this.xp.run(async () => {
+      const tId = this.toObjectId(topicId, 'Topic');
+      const topic = await this.requireTopicAccess(userId, tId);
+      const uId = new Types.ObjectId(userId);
+      const filter: Record<string, unknown> = { topicId: tId };
+      if (language) filter.language = language;
+      const resources = await this.resourceModel.find(filter).lean();
+      const problems = await this.problemModel.find({ topicId: tId }).lean();
+      let xpRevoked = 0;
+      for (const resource of resources)
+        xpRevoked += await this.xp.revoke(uId, 'resource', resource._id);
+      for (const problem of problems)
+        xpRevoked += await this.xp.revoke(uId, 'problem', problem._id);
+      xpRevoked += await this.xp.revoke(uId, 'topic', tId);
+      xpRevoked += await this.xp.revoke(uId, 'level', topic.levelId);
+      await this.resourceProgressModel.deleteMany({
         userId: uId,
-        resourceId: { $in: resourceIds },
-        isCompleted: true,
-        xpAwarded: true,
-      })
-      .lean();
-
-    let xpRevoked = 0;
-    for (const prog of completedProgress) {
-      const res = resources.find(
-        (r) => String(r._id) === String(prog.resourceId),
+        resourceId: { $in: resources.map((r) => r._id) },
+      });
+      await this.problemProgressModel.deleteMany({
+        userId: uId,
+        problemId: { $in: problems.map((p) => p._id) },
+      });
+      await this.topicProgressModel.updateOne(
+        { userId: uId, topicId: tId },
+        { $set: { topicBonusAwarded: false } },
       );
-      if (!res) continue;
-      xpRevoked += res.xpReward ?? 10;
-    }
-
-    // Batch-delete all resource XP transactions in one query
-    if (completedProgress.length > 0) {
-      await this.xpTransactionModel.deleteMany({
-        userId: uId,
-        sourceType: 'resource',
-        sourceId: { $in: completedProgress.map((p) => p.resourceId) },
-      });
-    }
-
-    // Delete all resource progress for this user + topic (or language)
-    await this.resourceProgressModel.deleteMany({
-      userId: uId,
-      resourceId: { $in: resourceIds },
+      await this.levelProgressModel.updateOne(
+        { userId: uId, levelId: topic.levelId },
+        { $set: { levelBonusAwarded: false } },
+      );
+      await this.updateTopicAndLevelProgress(userId, tId, language);
+      return { ok: true, xpRevoked };
     });
-
-    // When switching language, also revoke all problem XP for this topic
-    // (problems are unlocked by learning progress, so resetting learning = re-locking problems)
-    const topicProblems = await this.problemModel.find({ topicId: tId }).lean();
-    if (topicProblems.length > 0) {
-      const problemIds = topicProblems.map((p) => p._id);
-      const solvedWithXp = await this.problemProgressModel
-        .find({
-          userId: uId,
-          problemId: { $in: problemIds },
-          isSolved: true,
-          xpAwarded: true,
-        })
-        .lean();
-
-      if (solvedWithXp.length > 0) {
-        for (const prog of solvedWithXp) {
-          const problem = topicProblems.find(
-            (p) => String(p._id) === String(prog.problemId),
-          );
-          if (!problem) continue;
-          xpRevoked += problem.xpReward ?? 40;
-        }
-        await this.xpTransactionModel.deleteMany({
-          userId: uId,
-          sourceType: 'problem',
-          sourceId: { $in: solvedWithXp.map((p) => p.problemId) },
-        });
-        await this.problemProgressModel.deleteMany({
-          userId: uId,
-          problemId: { $in: problemIds },
-        });
-      }
-    }
-
-    // Reset learning progress in topic progress
-    const topicProgress = await this.topicProgressModel.findOne({
-      userId: uId,
-      topicId: tId,
-    });
-    const topic = await this.topicModel.findById(tId).lean();
-    if (topicProgress?.topicBonusAwarded && topic) {
-      xpRevoked += topic.topicXpReward ?? 100;
-      await this.xpTransactionModel.deleteOne({
-        userId: uId,
-        sourceType: 'topic',
-        sourceId: tId,
-      });
-    }
-    await this.topicProgressModel.updateOne(
-      { userId: uId, topicId: tId },
-      {
-        $set: {
-          learningPct: 0,
-          problemPct: 0,
-          isTopicComplete: false,
-          completedAt: null,
-          topicBonusAwarded: false,
-        },
-      },
-    );
-
-    // Revoke level bonus XP if awarded and reset flag
-    if (topic) {
-      const levelProgress = await this.levelProgressModel.findOne({
-        userId: uId,
-        levelId: topic.levelId,
-      });
-      if (levelProgress?.levelBonusAwarded) {
-        const level = await this.levelModel.findById(topic.levelId).lean();
-        if (level) {
-          xpRevoked += level.levelBonusXp ?? 500;
-          await this.xpTransactionModel.deleteOne({
-            userId: uId,
-            sourceType: 'level',
-            sourceId: topic.levelId,
-          });
-        }
-        await this.levelProgressModel.updateOne(
-          { userId: uId, levelId: topic.levelId },
-          { $set: { levelBonusAwarded: false } },
-        );
-      }
-    }
-
-    // Revoke total XP after all revocations are accumulated
-    if (xpRevoked > 0) {
-      await this.revokeXp(uId, xpRevoked);
-    }
-
-    return { ok: true, xpRevoked };
   }
 }

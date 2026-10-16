@@ -27,7 +27,7 @@ The full API specification is available via Swagger. When the backend is running
 ### 1. Authentication & Verification
 Identity management with JWT auth, password reset, and a Codeforces profile verification system. Verification generates timed codes that users paste into their CF profile for identity proof. Awards +50 XP upon successful verification.
 
-- **Endpoints**: `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/logout`, `POST /api/auth/reset-pin`, `POST /api/auth/sync-profile`, `POST /api/auth/generate-verification-code`, `POST /api/auth/verify-codeforces-profile`
+- **Endpoints**: `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/logout`, `POST /api/auth/reset-password`, `POST /api/auth/sync-profile`, `POST /api/auth/generate-verification-code`, `POST /api/auth/verify-codeforces-profile`
 
 ### 2. Friends System
 Full friend request lifecycle — send, accept, decline, cancel, and remove. Supports viewing friends' training statistics for social competitive tracking.
@@ -155,3 +155,14 @@ All routes are prefixed with `/api` as per global configuration.
   <p>Standardizing Competitive Excellence • 2026</p>
 </div>
 
+
+
+### Password recovery and trusted origins
+
+Password recovery uses a unique, expiring code in the Codeforces profile's **First name** field. Start with `POST /api/auth/initiate-reset`, prove ownership with `POST /api/auth/verify-reset-profile` (`verificationToken` only), then finish with `POST /api/auth/reset-password` (`resetToken` and `newPassword`). Authenticated password changes use the same password endpoint with `oldPassword` and `newPassword`. The old submission-verification flow is disabled.
+
+Production CORS permits exact trusted origins. Set `FRONTEND_ORIGIN` and, when needed, a comma-separated `CORS_ORIGINS` list of additional origins you control. Wildcard preview domains are not permitted.
+
+Run `npm test -- --runInBand`, `npm run test:e2e -- --runInBand`, `npm run typecheck`, `npm run lint`, and `npm run build` before release. Integration tests create a disposable local MongoDB replica set and do not load `.env` or connect to application databases.
+
+Before releasing the ObjectId schema correction, run `npm run references:check` for a read-only report. `npm run references:normalize` converts only valid historical string IDs, inside a transaction; it refuses collisions and invalid IDs and never deletes records or changes XP. Historical XP discrepancies require separate evidence before repair.

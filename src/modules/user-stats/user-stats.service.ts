@@ -29,11 +29,11 @@ export class UserStatsService {
 
   async getOrCreate(userId: string): Promise<UserStatsDocument> {
     const id = new Types.ObjectId(userId);
-    let doc = await this.userStatsModel.findOne({ user: id });
-    if (!doc) {
-      doc = await this.userStatsModel.create({ user: id });
-    }
-    return doc;
+    return await this.userStatsModel.findOneAndUpdate(
+      { user: id },
+      { $setOnInsert: { user: id } },
+      { upsert: true, returnDocument: 'after' },
+    );
   }
 
   async recordTrainingCompleted(userId: string, atMs: number = Date.now()) {

@@ -1,11 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Types, SchemaTypes } from 'mongoose';
 
 export type RoadmapResourceDocument = HydratedDocument<RoadmapResource>;
 
 @Schema({ collection: 'roadmap_resources', timestamps: true })
 export class RoadmapResource {
-  @Prop({ type: Types.ObjectId, ref: 'RoadmapTopic', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'RoadmapTopic', required: true })
   topicId!: Types.ObjectId;
 
   @Prop({ required: true, maxlength: 200 })

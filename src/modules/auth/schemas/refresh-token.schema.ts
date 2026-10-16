@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Types, SchemaTypes } from 'mongoose';
 
 export type RefreshTokenDocument = HydratedDocument<RefreshToken>;
 
@@ -8,7 +8,12 @@ export class RefreshToken {
   @Prop({ required: true, unique: true, index: true })
   jti!: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
+  @Prop({
+    type: SchemaTypes.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true,
+  })
   userId!: Types.ObjectId;
 
   @Prop({ required: true })
@@ -28,6 +33,9 @@ export class RefreshToken {
 
   @Prop()
   revokedAt?: Date;
+
+  @Prop({ default: 0 })
+  authVersion!: number;
 }
 
 export const RefreshTokenSchema = SchemaFactory.createForClass(RefreshToken);

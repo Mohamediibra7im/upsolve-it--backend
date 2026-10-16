@@ -14,6 +14,9 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { UserXp } from '../roadmap/schemas/user-xp.schema';
 import { XpTransaction } from '../roadmap/schemas/xp-transaction.schema';
 import bcrypt from 'bcryptjs';
+import { TransactionsService } from '../../common/database/transactions.module';
+import { PasswordResetChallenge } from './schemas/password-reset-challenge.schema';
+import { XpService } from '../xp/xp.module';
 
 jest.mock('bcryptjs', () => ({
   hash: jest.fn().mockResolvedValue('hashed'),
@@ -82,6 +85,15 @@ describe('AuthService', () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
+        {
+          provide: TransactionsService,
+          useValue: { run: (work: () => Promise<unknown>) => work() },
+        },
+        {
+          provide: getModelToken(PasswordResetChallenge.name),
+          useValue: createModel(),
+        },
+        { provide: XpService, useValue: {} },
         { provide: getModelToken(User.name), useValue: userModel },
         {
           provide: getModelToken(RefreshToken.name),

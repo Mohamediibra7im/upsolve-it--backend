@@ -77,17 +77,37 @@ export class RateLimiterGuard implements CanActivate {
         duration: 60 * 60,
         keyPrefix: 'contact',
       },
-      'FriendsController.addFriend': {
+      'FriendsController.sendRequest': {
         points: 10,
         duration: 60 * 60,
         keyPrefix: 'friends:add',
       },
-      'TrainingsController.startTraining': {
+      'TrainingsController.create': {
         points: 20,
         duration: 60 * 60,
         keyPrefix: 'training:start',
       },
-      'UpsolveController.addUpsolve': {
+      'TrainingSessionsController.create': {
+        points: 20,
+        duration: 60 * 60,
+        keyPrefix: 'training:start',
+      },
+      'AuthController.initiateReset': {
+        points: 5,
+        duration: 60 * 15,
+        keyPrefix: 'auth:reset-start',
+      },
+      'AuthController.verifyResetProfile': {
+        points: 10,
+        duration: 60 * 15,
+        keyPrefix: 'auth:reset-verify',
+      },
+      'AuthController.resetPassword': {
+        points: 5,
+        duration: 60 * 15,
+        keyPrefix: 'auth:reset-password',
+      },
+      'UpsolveController.add': {
         points: 30,
         duration: 60 * 60,
         keyPrefix: 'upsolve:add',

@@ -1,14 +1,14 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Types, SchemaTypes } from 'mongoose';
 
 export type UserTopicProgressDocument = HydratedDocument<UserTopicProgress>;
 
 @Schema({ collection: 'user_topic_progress', timestamps: true })
 export class UserTopicProgress {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   userId!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'RoadmapTopic', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'RoadmapTopic', required: true })
   topicId!: Types.ObjectId;
 
   @Prop({ type: Number, default: 0 })

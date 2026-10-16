@@ -1,3 +1,5 @@
+import { XpModule } from '../xp/xp.module';
+import { RoadmapAccessService } from './roadmap-access.service';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AdminModule } from '../admin/admin.module';
@@ -50,6 +52,7 @@ import { RoadmapProgressService } from './roadmap-progress.service';
 @Module({
   imports: [
     AuthModule,
+    XpModule,
     AdminModule,
     AuditLogsModule,
     MongooseModule.forFeature([
@@ -71,6 +74,7 @@ import { RoadmapProgressService } from './roadmap-progress.service';
     RoadmapAdminService,
     RoadmapPublicService,
     RoadmapProgressService,
+    RoadmapAccessService,
   ],
   exports: [RoadmapAdminService, RoadmapPublicService, RoadmapProgressService],
 })

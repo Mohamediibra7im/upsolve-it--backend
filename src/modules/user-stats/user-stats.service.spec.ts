@@ -73,7 +73,7 @@ describe('UserStatsService', () => {
   describe('getOrCreate', () => {
     it('returns existing stats doc', async () => {
       const doc = { _id: 'sid', user: VALID_ID, trainingStreak: 5 };
-      userStatsModel.findOne.mockResolvedValue(doc);
+      userStatsModel.findOneAndUpdate.mockResolvedValue(doc);
 
       const result = await service.getOrCreate(VALID_ID);
 
@@ -82,18 +82,16 @@ describe('UserStatsService', () => {
     });
 
     it('creates new stats doc if none exists', async () => {
-      userStatsModel.findOne.mockResolvedValue(null);
       const created = { _id: 'sid', user: VALID_ID };
-      userStatsModel.create.mockResolvedValue(created);
+      userStatsModel.findOneAndUpdate.mockResolvedValue(created);
 
       const result = await service.getOrCreate(VALID_ID);
 
-      expect(userStatsModel.findOne).toHaveBeenCalledWith({
-        user: expect.any(Types.ObjectId),
-      });
-      expect(userStatsModel.create).toHaveBeenCalledWith({
-        user: expect.any(Types.ObjectId),
-      });
+      expect(userStatsModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { user: expect.any(Types.ObjectId) },
+        { $setOnInsert: { user: expect.any(Types.ObjectId) } },
+        { upsert: true, returnDocument: 'after' },
+      );
       expect(result).toEqual(created);
     });
   });
@@ -114,7 +112,7 @@ describe('UserStatsService', () => {
         consistencyScore: 50,
         save: jest.fn().mockResolvedValue(undefined),
       } as any;
-      userStatsModel.findOne.mockResolvedValue(existingDoc);
+      userStatsModel.findOneAndUpdate.mockResolvedValue(existingDoc);
       (applyActivityToStreak as jest.Mock).mockReturnValue({
         streak: 4,
         best: 5,
@@ -151,7 +149,7 @@ describe('UserStatsService', () => {
         consistencyScore: 50,
         save: jest.fn().mockResolvedValue(undefined),
       } as any;
-      userStatsModel.findOne.mockResolvedValue(existingDoc);
+      userStatsModel.findOneAndUpdate.mockResolvedValue(existingDoc);
       (applyActivityToStreak as jest.Mock).mockReturnValue({
         streak: 1,
         best: 1,
@@ -191,7 +189,7 @@ describe('UserStatsService', () => {
         activeDays: ['2026-06-27'],
         save: jest.fn().mockResolvedValue(undefined),
       } as any;
-      userStatsModel.findOne.mockResolvedValue(existingDoc);
+      userStatsModel.findOneAndUpdate.mockResolvedValue(existingDoc);
 
       // Provide 5 training records so recomputeConsistency sees 5 active days
       const now = Date.now();

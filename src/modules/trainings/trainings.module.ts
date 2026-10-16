@@ -1,3 +1,4 @@
+import { TransactionsModule } from '../../common/database/transactions.module';
 import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
@@ -14,6 +15,7 @@ import { UpsolveModule } from '../upsolve/upsolve.module';
 @Module({
   imports: [
     AuthModule,
+    TransactionsModule,
     UserStatsModule,
     forwardRef(() => UpsolveModule),
     MongooseModule.forFeature([

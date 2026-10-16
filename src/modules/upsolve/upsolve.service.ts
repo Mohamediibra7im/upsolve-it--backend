@@ -44,8 +44,16 @@ export class UpsolveService {
   }
 
   async insertMany(userId: string, problems: any[]) {
-    const docs = problems.map((p) => ({ ...p, user: userId }));
-    await this.upsolveModel.insertMany(docs, { ordered: false });
+    if (!problems.length) return;
+    await this.upsolveModel.bulkWrite(
+      problems.map((p) => ({
+        updateOne: {
+          filter: { user: userId, contestId: p.contestId, index: p.index },
+          update: { $setOnInsert: { ...p, user: userId } },
+          upsert: true,
+        },
+      })),
+    );
   }
 
   async bulkUpdateSolvedTime(userId: string, problems: any[]) {

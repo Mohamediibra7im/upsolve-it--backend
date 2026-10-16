@@ -29,7 +29,11 @@ describe('ContactService reply history', () => {
       accepted: ['reader@example.com'],
       rejected: [],
     });
-    jest.spyOn(nodemailer, 'createTransport').mockReturnValue({ sendMail });
+    jest
+      .spyOn(nodemailer, 'createTransport')
+      .mockReturnValue({ sendMail } as unknown as ReturnType<
+        typeof nodemailer.createTransport
+      >);
     update = jest.fn((_id: string, changes: any) => {
       const replies = [...(stored.replies ?? []), changes.$push.replies];
       stored = new MessageModel({ ...stored, replies }).toObject();

@@ -1,14 +1,13 @@
 import { IsOptional, IsString, MinLength } from 'class-validator';
 
-export class ResetPinDto {
+export class ResetPasswordDto {
   @IsOptional()
   @IsString()
   resetToken?: string;
 
-  @IsOptional()
   @IsString()
   @MinLength(8)
-  newPassword?: string;
+  newPassword!: string;
 
   @IsOptional()
   @IsString()

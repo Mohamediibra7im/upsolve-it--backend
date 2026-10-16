@@ -112,10 +112,15 @@ describe('UpsolveService', () => {
 
       await service.insertMany('uid', problems);
 
-      expect(upsolveModel.insertMany).toHaveBeenCalledWith(
-        [{ ...problems[0], user: 'uid' }],
-        { ordered: false },
-      );
+      expect(upsolveModel.bulkWrite).toHaveBeenCalledWith([
+        {
+          updateOne: {
+            filter: { user: 'uid', contestId: 1, index: 'A' },
+            update: { $setOnInsert: { ...problems[0], user: 'uid' } },
+            upsert: true,
+          },
+        },
+      ]);
     });
   });
 

@@ -1,105 +1,47 @@
+import { configureHttpApplication } from '../src/common/http/configure-http';
+import express from 'express';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from '../src/app.module';
-import { ValidationPipe } from '@nestjs/common';
-import cookieParser from 'cookie-parser';
-import helmet from 'helmet';
 import { ConfigService } from '@nestjs/config';
-import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 
 let cachedApp: any;
 
 async function createApp() {
-    if (cachedApp) return cachedApp;
+  if (cachedApp) return cachedApp;
 
-    const express = require('express');
-    const app = express();
-    const adapter = new ExpressAdapter(app);
+  const app = express();
+  const adapter = new ExpressAdapter(app);
 
-    const nestApp = await NestFactory.create(AppModule, adapter, {
-        logger: false,
-    });
+  const nestApp = await NestFactory.create(AppModule, adapter, {
+    logger: false,
+  });
 
-    const config = nestApp.get(ConfigService);
-    const logger = nestApp.get(Logger);
+  const config = nestApp.get(ConfigService);
 
-    nestApp.use(
-        helmet({
-            contentSecurityPolicy: {
-                directives: {
-                    'default-src': ["'self'"],
-                    'base-uri': ["'self'"],
-                    'font-src': ["'self'", 'https:', 'data:'],
-                    'form-action': ["'self'"],
-                    'frame-ancestors': ["'self'"],
-                    'img-src': ["'self'", 'data:', 'https:'],
-                    'object-src': ["'none'"],
-                    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-                    'script-src-attr': ["'unsafe-inline'"],
-                    'style-src': ["'self'", 'https:', "'unsafe-inline'"],
-                    'upgrade-insecure-requests': [],
-                },
-            },
-        }),
-    );
-    nestApp.use(cookieParser());
-    nestApp.useGlobalPipes(
-        new ValidationPipe({
-            whitelist: true,
-            transform: true,
-        }),
-    );
-    nestApp.useGlobalFilters(new HttpExceptionFilter());
+  configureHttpApplication(nestApp, config);
 
-    const frontendOrigin = config.get<string>('FRONTEND_ORIGIN') ?? '';
-    const appUrl = config.get<string>('APP_URL') ?? '';
+  // Generate and serve OpenAPI spec as JSON (no UI — use any OpenAPI viewer)
+  const openApiConfig = new DocumentBuilder()
+    .setTitle('Upsolve.it - Intelligence Engine')
+    .setDescription(
+      'The scalable intelligence engine powering the Upsolve.it tactical platform.',
+    )
+    .setVersion('2.0')
+    .addTag('Intelligence')
+    .addBearerAuth()
+    .build();
 
-    const staticOrigins = [
-        frontendOrigin,
-        appUrl,
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://127.0.0.1:3000',
-        'https://upsolve-iit.vercel.app',
-        'https://upsolve-it.hnuicpc.tech',
-    ].filter(Boolean);
+  const openApiDocument = SwaggerModule.createDocument(nestApp, openApiConfig);
+  app.get('/docs-json', (_req, res) => res.json(openApiDocument));
 
-    const vercelWildcard = /^https?:\/\/[a-zA-Z0-9.-]+\.(vercel\.app|hnuicpc\.tech)$/;
-
-    nestApp.enableCors({
-        origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-            if (!origin || staticOrigins.includes(origin) || vercelWildcard.test(origin)) {
-                callback(null, true);
-            } else {
-                logger.warn(`CORS blocked origin: ${origin}`);
-                callback(new Error('Not allowed by CORS'));
-            }
-        },
-        credentials: true,
-    });
-
-    nestApp.setGlobalPrefix('api', { exclude: ['/'] });
-
-    // Generate and serve OpenAPI spec as JSON (no UI — use any OpenAPI viewer)
-    const openApiConfig = new DocumentBuilder()
-        .setTitle('Upsolve.it - Intelligence Engine')
-        .setDescription('The scalable intelligence engine powering the Upsolve.it tactical platform.')
-        .setVersion('2.0')
-        .addTag('Intelligence')
-        .addBearerAuth()
-        .build();
-
-    const openApiDocument = SwaggerModule.createDocument(nestApp, openApiConfig);
-    app.get('/docs-json', (_req, res) => res.json(openApiDocument));
-
-    await nestApp.init();
-    cachedApp = app;
-    return app;
+  await nestApp.init();
+  cachedApp = app;
+  return app;
 }
 
 export default async function handler(req: any, res: any) {
-    const app = await createApp();
-    return app(req, res);
+  const app = await createApp();
+  return app(req, res);
 }

@@ -18,16 +18,17 @@ import {
 } from './schemas/refresh-token.schema';
 import { User, type UserDocument } from './schemas/user.schema';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
-import { UserXp, type UserXpDocument } from '../roadmap/schemas/user-xp.schema';
-import {
-  XpTransaction,
-  type XpTransactionDocument,
-} from '../roadmap/schemas/xp-transaction.schema';
 import { Types } from 'mongoose';
 import { getRankFromRating } from '../../common/utils/rating';
 import { shouldSyncProfile } from '../../common/utils/profile';
 import { validatePassword } from '../../common/utils/password';
 import { fetchCodeforcesUserInfo } from '../../common/utils/codeforces-api';
+import { XpService } from '../xp/xp.module';
+import { TransactionsService } from '../../common/database/transactions.module';
+import {
+  PasswordResetChallenge,
+  PasswordResetChallengeDocument,
+} from './schemas/password-reset-challenge.schema';
 
 const loginLimiter = new RateLimiterMemory({
   points: 5,
@@ -49,9 +50,7 @@ const loginUserLimiter = new RateLimiterMemory({
   blockDuration: 900,
 });
 
-const VERIFICATION_CONTEST_ID = 4;
-const VERIFICATION_PROBLEM_INDEX = 'A';
-const VERIFICATION_TIME_WINDOW_SECONDS = 30;
+const RESET_LIFETIME_MS = 10 * 60 * 1000;
 
 function generateRefreshToken(): string {
   return crypto.randomBytes(64).toString('hex');
@@ -90,12 +89,13 @@ export class AuthService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(RefreshToken.name)
     private readonly refreshTokenModel: Model<RefreshTokenDocument>,
-    @InjectModel(UserXp.name) private readonly xpModel: Model<UserXpDocument>,
-    @InjectModel(XpTransaction.name)
-    private readonly xpTransactionModel: Model<XpTransactionDocument>,
     private readonly jwt: JwtService,
     private readonly auditLogs: AuditLogsService,
     private readonly config: ConfigService,
+    @InjectModel(PasswordResetChallenge.name)
+    private readonly resetChallengeModel: Model<PasswordResetChallengeDocument>,
+    private readonly transactions: TransactionsService,
+    private readonly xp: XpService,
   ) {
     const secret = this.config.get<string>('JWT_REFRESH_SECRET');
     if (!secret)
@@ -103,14 +103,25 @@ export class AuthService {
     this.resetSecret = secret;
   }
 
-  async verifyAccessToken(token: string): Promise<{ userId: string } | null> {
+  async verifyAccessToken(
+    token: string,
+  ): Promise<{ userId: string; authVersion?: number } | null> {
     try {
       // Verify against the access-token secret only. Reset/verification tokens
       // are signed with `resetSecret`, so they fail here and cannot be replayed
       // as a session. HS256 is pinned to prevent algorithm confusion.
-      const decoded = await this.jwt.verifyAsync<{ userId: string }>(token, {
+      const decoded = await this.jwt.verifyAsync<{
+        userId: string;
+        type?: string;
+        authVersion?: number;
+      }>(token, {
         algorithms: ['HS256'],
       });
+      if (
+        !Types.ObjectId.isValid(decoded.userId) ||
+        (decoded.type && decoded.type !== 'access')
+      )
+        return null;
       return decoded;
     } catch {
       return null;
@@ -122,7 +133,14 @@ export class AuthService {
     if (!token) return null;
     const decoded = await this.verifyAccessToken(token);
     if (!decoded) return null;
-    return await this.userModel.findById(decoded.userId);
+    const user = await this.userModel.findById(decoded.userId);
+    if (
+      !user ||
+      user.locked ||
+      (user.authVersion ?? 0) !== (decoded.authVersion ?? 0)
+    )
+      return null;
+    return user;
   }
 
   async rateLimit(identifier: string, limiter: RateLimiterMemory) {
@@ -261,178 +279,209 @@ export class AuthService {
 
   async initiateReset(handle: string) {
     if (!handle) throw new BadRequestException('Codeforces handle is required');
-    const user = await this.userModel.findOne({ codeforcesHandle: handle });
-    if (!user) throw new BadRequestException('User not found');
-
+    const user = await this.userModel
+      .findOne({ codeforcesHandle: handle })
+      .collation({ locale: 'en', strength: 2 });
+    if (!user || user.locked)
+      throw new BadRequestException('Account unavailable');
+    const code = crypto.randomBytes(16).toString('hex');
+    const expiresAt = new Date(Date.now() + RESET_LIFETIME_MS);
+    const challenge = await this.resetChallengeModel.create({
+      userId: user._id,
+      authVersion: user.authVersion ?? 0,
+      codeHash: hashRefreshToken(code),
+      expiresAt,
+      cleanupAt: new Date(expiresAt.getTime() + RESET_LIFETIME_MS),
+    });
     const verificationToken = await this.jwt.signAsync(
       {
         userId: String(user._id),
-        handle: user.codeforcesHandle,
-        type: 'verify',
+        challengeId: String(challenge._id),
+        type: 'profile-proof-v2',
       },
-      { expiresIn: '5m', secret: this.resetSecret },
+      { expiresIn: '10m', secret: this.resetSecret },
     );
-
-    return { verificationToken };
+    return { verificationToken, code, expiresAt };
   }
 
-  async verifySubmission(verificationToken: string) {
-    if (!verificationToken) {
-      throw new BadRequestException('Verification token is required');
-    }
-
-    let decoded: {
-      userId?: string;
-      handle?: string;
-      iat?: number;
-      type?: string;
-    };
+  private async decodeResetToken(token: string, purpose: string) {
     try {
-      decoded = await this.jwt.verifyAsync(verificationToken, {
+      const decoded = await this.jwt.verifyAsync<{
+        userId: string;
+        challengeId: string;
+        type: string;
+      }>(token, {
         algorithms: ['HS256'],
         secret: this.resetSecret,
       });
+      if (
+        decoded.type !== purpose ||
+        !Types.ObjectId.isValid(decoded.userId) ||
+        !Types.ObjectId.isValid(decoded.challengeId)
+      )
+        throw new Error('Wrong purpose');
+      return decoded;
     } catch {
-      throw new BadRequestException('Invalid or expired verification token');
-    }
-    if (decoded?.type !== 'verify') {
-      throw new BadRequestException('Invalid or expired verification token');
-    }
-
-    const handle = String(decoded.handle ?? '');
-    const iat = Number(decoded.iat ?? 0);
-    const submissionsUrl = `https://codeforces.com/api/user.status?handle=${encodeURIComponent(
-      handle,
-    )}&from=1&count=10`;
-
-    let submissionsRes: Response;
-    try {
-      submissionsRes = await fetch(submissionsUrl, {
-        signal: AbortSignal.timeout(8000),
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to reach Codeforces API for handle ${handle}:`,
-        error,
-      );
       throw new BadRequestException(
-        'Unable to reach Codeforces API. Please try again later.',
+        'Invalid or expired recovery token. Restart password recovery.',
       );
     }
-    const submissionsData = await submissionsRes.json();
-    if (submissionsData?.status !== 'OK') {
-      this.logger.warn(
-        `Codeforces API returned non-OK status for handle ${handle}: ${JSON.stringify(submissionsData)}`,
-      );
-      throw new BadRequestException(
-        'Codeforces API is currently unavailable. Please try again.',
-      );
-    }
-
-    const submissions = submissionsData.result ?? [];
-    const recentCompilationError = submissions.find(
-      (sub: any) =>
-        sub?.problem?.contestId === VERIFICATION_CONTEST_ID &&
-        sub?.problem?.index === VERIFICATION_PROBLEM_INDEX &&
-        sub?.verdict === 'COMPILATION_ERROR' &&
-        typeof sub?.creationTimeSeconds === 'number' &&
-        sub.creationTimeSeconds >= iat - VERIFICATION_TIME_WINDOW_SECONDS,
-    );
-
-    if (!recentCompilationError) {
-      throw new BadRequestException(
-        `Verification failed. No recent compilation error found for problem ${VERIFICATION_CONTEST_ID}${VERIFICATION_PROBLEM_INDEX}.`,
-      );
-    }
-
-    const resetToken = await this.jwt.signAsync(
-      { userId: decoded.userId, type: 'reset' },
-      { expiresIn: '10m', secret: this.resetSecret },
-    );
-
-    return { success: true, resetToken };
   }
 
-  async resetPin(
-    userId: string | undefined,
-    body: {
-      resetToken?: string;
-      newPassword?: string;
-      oldPassword?: string;
-    },
-  ) {
-    // Forgot password flow
-    if (body.resetToken) {
-      if (!body.newPassword) {
-        throw new BadRequestException('New password is required.');
-      }
-      const passwordValidation = validatePassword(body.newPassword);
-      if (!passwordValidation.isValid) {
-        throw new BadRequestException(passwordValidation.errors.join('. '));
-      }
-
-      let decoded: { userId?: string; type?: string };
-      try {
-        decoded = await this.jwt.verifyAsync(body.resetToken, {
-          algorithms: ['HS256'],
-          secret: this.resetSecret,
-        });
-      } catch {
-        throw new BadRequestException('Invalid or expired reset token');
-      }
-      if (decoded?.type !== 'reset') {
-        throw new BadRequestException('Invalid or expired reset token');
-      }
-
-      const user = await this.userModel.findById(decoded.userId);
-      if (!user) throw new BadRequestException('User not found');
-
-      const hashedNewPassword = await bcrypt.hash(body.newPassword, 10);
-      await this.userModel.findByIdAndUpdate(decoded.userId, {
-        password: hashedNewPassword,
-      });
-
-      await this.refreshTokenModel.updateMany(
-        { userId: new Types.ObjectId(decoded.userId), revoked: false },
-        { $set: { revoked: true, revokedAt: new Date() } },
-      );
-
-      return { message: 'Password has been reset successfully.' };
-    }
-
-    // Logged-in flow
-    if (!userId) throw new UnauthorizedException('Unauthorized');
-
-    if (!body.oldPassword || !body.newPassword) {
-      throw new BadRequestException(
-        'Both current and new passwords are required.',
-      );
-    }
-
-    const passwordValidation = validatePassword(body.newPassword);
-    if (!passwordValidation.isValid) {
-      throw new BadRequestException(passwordValidation.errors.join('. '));
-    }
-
-    const user = await this.userModel.findById(userId);
-    if (!user) throw new BadRequestException('User not found');
-
-    const isMatch = await bcrypt.compare(body.oldPassword, user.password);
-    if (!isMatch) {
-      throw new UnauthorizedException('Incorrect current password.');
-    }
-
-    const hashedNewPassword = await bcrypt.hash(body.newPassword, 10);
-    await this.userModel.findByIdAndUpdate(userId, {
-      password: hashedNewPassword,
+  async verifyResetProfile(verificationToken: string) {
+    const decoded = await this.decodeResetToken(
+      verificationToken,
+      'profile-proof-v2',
+    );
+    const challenge = await this.resetChallengeModel.findOne({
+      _id: decoded.challengeId,
+      userId: decoded.userId,
     });
+    const user = await this.userModel.findById(decoded.userId);
+    if (
+      !challenge ||
+      !user ||
+      user.locked ||
+      challenge.consumedAt ||
+      challenge.expiresAt.getTime() <= Date.now() ||
+      challenge.authVersion !== (user.authVersion ?? 0)
+    ) {
+      throw new BadRequestException(
+        'Invalid or expired profile challenge. Restart password recovery.',
+      );
+    }
+    let matched = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const info = await fetchCodeforcesUserInfo(user.codeforcesHandle);
+      const firstName: unknown = info?.[0]?.firstName;
+      if (
+        typeof firstName === 'string' &&
+        hashRefreshToken(firstName) === challenge.codeHash
+      ) {
+        matched = true;
+        break;
+      }
+      if (attempt < 2)
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    if (!matched)
+      throw new BadRequestException(
+        'Set your Codeforces first name to the recovery code, save your profile, then try again.',
+      );
+    const verified = await this.resetChallengeModel.findOneAndUpdate(
+      {
+        _id: challenge._id,
+        consumedAt: null,
+        expiresAt: { $gt: new Date() },
+        resetExpiresAt: null,
+      },
+      { $set: { resetExpiresAt: new Date(Date.now() + RESET_LIFETIME_MS) } },
+      { returnDocument: 'after' },
+    );
+    const current =
+      verified ?? (await this.resetChallengeModel.findById(challenge._id));
+    if (
+      !current?.resetExpiresAt ||
+      current.consumedAt ||
+      current.resetExpiresAt.getTime() <= Date.now()
+    )
+      throw new BadRequestException('Recovery proof expired');
+    const resetToken = await this.jwt.signAsync(
+      {
+        userId: decoded.userId,
+        challengeId: decoded.challengeId,
+        type: 'password-reset-v2',
+        iat: Math.floor(Date.now() / 1000),
+      },
+      {
+        secret: this.resetSecret,
+        expiresIn:
+          Math.floor(current.resetExpiresAt.getTime() / 1000) -
+          Math.floor(Date.now() / 1000),
+      },
+    );
+    return { success: true, resetToken, expiresAt: current.resetExpiresAt };
+  }
 
+  async resetPassword(
+    userId: string | undefined,
+    body: { resetToken?: string; newPassword?: string; oldPassword?: string },
+  ) {
+    if (
+      !body.newPassword ||
+      (body.resetToken !== undefined && body.oldPassword !== undefined)
+    )
+      throw new BadRequestException(
+        'Provide a new password and either a recovery token or your current password.',
+      );
+    const validation = validatePassword(body.newPassword);
+    if (!validation.isValid)
+      throw new BadRequestException(validation.errors.join('. '));
+    const decoded = body.resetToken
+      ? await this.decodeResetToken(body.resetToken, 'password-reset-v2')
+      : null;
+    if (!decoded && (!userId || !body.oldPassword))
+      throw new UnauthorizedException('Current password is required');
+    const targetId = decoded?.userId ?? userId!;
+    const user = await this.userModel.findById(targetId);
+    if (!user || user.locked)
+      throw new BadRequestException('Account unavailable');
+    if (!decoded && !(await bcrypt.compare(body.oldPassword!, user.password)))
+      throw new UnauthorizedException('Incorrect current password.');
+    const password = await bcrypt.hash(body.newPassword, 10);
+    await this.transactions.run(async () => {
+      if (decoded) {
+        const claimed = await this.resetChallengeModel.findOneAndUpdate(
+          {
+            _id: decoded.challengeId,
+            userId: user._id,
+            authVersion: user.authVersion ?? 0,
+            consumedAt: null,
+            resetExpiresAt: { $gt: new Date() },
+          },
+          { $set: { consumedAt: new Date() } },
+        );
+        if (!claimed)
+          throw new BadRequestException('Invalid or expired reset token');
+      }
+      const updated = await this.userModel.updateOne(
+        {
+          _id: user._id,
+          locked: { $ne: true },
+          password: user.password,
+          $or: [
+            { authVersion: user.authVersion ?? 0 },
+            ...((user.authVersion ?? 0) === 0
+              ? [{ authVersion: { $exists: false } }]
+              : []),
+          ],
+        },
+        { $set: { password }, $inc: { authVersion: 1 } },
+      );
+      if (!updated.modifiedCount)
+        throw new BadRequestException(
+          'Account changed. Restart password recovery.',
+        );
+      await this.revokeRefreshSessions(user._id);
+    });
+    return { message: 'Password has been reset successfully.' };
+  }
+
+  private async revokeRefreshSessions(userId: Types.ObjectId) {
     await this.refreshTokenModel.updateMany(
-      { userId: new Types.ObjectId(userId), revoked: false },
+      { userId, revoked: false },
       { $set: { revoked: true, revokedAt: new Date() } },
     );
+  }
 
-    return { message: 'Password reset successfully.' };
+  async setAccountLocked(userId: string, locked: boolean) {
+    await this.transactions.run(async () => {
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $set: { locked }, $inc: { authVersion: 1 } },
+      );
+      await this.revokeRefreshSessions(new Types.ObjectId(userId));
+    });
   }
 
   async syncProfile(user: UserDocument) {
@@ -478,6 +527,7 @@ export class AuthService {
     const accessToken = await this.jwt.signAsync({
       userId: user._id,
       type: 'access',
+      authVersion: user.authVersion ?? 0,
     });
 
     const refreshTokenValue = generateRefreshToken();
@@ -493,6 +543,7 @@ export class AuthService {
       token: hashedToken,
       expiresAt,
       revoked: false,
+      authVersion: user.authVersion ?? 0,
     });
 
     return {
@@ -513,68 +564,53 @@ export class AuthService {
     }
 
     const hashed = hashRefreshToken(refreshTokenValue);
-    const tokenDoc = await this.refreshTokenModel.findOne({ token: hashed });
-    if (!tokenDoc) throw new UnauthorizedException('Invalid refresh');
-
-    if (tokenDoc.expiresAt <= new Date()) {
-      throw new UnauthorizedException('Invalid refresh');
-    }
-
-    // Reuse detection with a grace window. Frontends routinely fire refresh
-    // concurrently (parallel 401s on load, multiple tabs); the loser of that
-    // race replays the just-rotated token. That is benign — reject only this
-    // call and let the winning refresh's new cookie win, WITHOUT revoking the
-    // family. Only a token revoked longer ago than the grace window is treated
-    // as genuine theft and revokes every session.
-    if (tokenDoc.revoked) {
-      const REUSE_GRACE_MS = 60_000;
-      const revokedAgo = tokenDoc.revokedAt
-        ? Date.now() - tokenDoc.revokedAt.getTime()
-        : Number.POSITIVE_INFINITY;
-      if (revokedAgo > REUSE_GRACE_MS) {
-        await this.refreshTokenModel.updateMany(
-          { userId: tokenDoc.userId, revoked: false },
-          { $set: { revoked: true, revokedAt: new Date() } },
-        );
+    const result = await this.transactions.run(async () => {
+      const tokenDoc = await this.refreshTokenModel.findOne({ token: hashed });
+      if (!tokenDoc || tokenDoc.expiresAt <= new Date()) return null;
+      const user = await this.userModel.findById(tokenDoc.userId);
+      if (
+        !user ||
+        user.locked ||
+        (user.authVersion ?? 0) !== (tokenDoc.authVersion ?? 0)
+      )
+        return null;
+      if (tokenDoc.revoked) {
+        const revokedAgo = tokenDoc.revokedAt
+          ? Date.now() - tokenDoc.revokedAt.getTime()
+          : Infinity;
+        if (revokedAgo > 60_000)
+          await this.revokeRefreshSessions(tokenDoc.userId);
+        return null; // Commit theft revocation before rejecting the request.
       }
-      throw new UnauthorizedException('Invalid refresh');
-    }
-
-    const user = await this.userModel.findById(tokenDoc.userId);
-    if (!user) throw new UnauthorizedException('Invalid refresh');
-
-    // rotate refresh token
-    await this.refreshTokenModel.updateMany(
-      { _id: tokenDoc._id },
-      { $set: { revoked: true, revokedAt: new Date() } },
-    );
-
-    const newRefreshTokenValue = generateRefreshToken();
-    const newHashedToken = hashRefreshToken(newRefreshTokenValue);
-    const newJti = crypto.randomUUID();
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
-
-    await this.refreshTokenModel.create({
-      jti: newJti,
-      userId: user._id,
-      token: newHashedToken,
-      expiresAt,
-      deviceInfo: (userAgent || 'unknown').substring(0, 100),
-      ipAddress: ip,
-      revoked: false,
+      const claimed = await this.refreshTokenModel.updateOne(
+        { _id: tokenDoc._id, revoked: false },
+        { $set: { revoked: true, revokedAt: new Date() } },
+      );
+      if (!claimed.modifiedCount) return null;
+      const newRefreshTokenValue = generateRefreshToken();
+      await this.refreshTokenModel.create({
+        jti: crypto.randomUUID(),
+        userId: user._id,
+        token: hashRefreshToken(newRefreshTokenValue),
+        expiresAt: new Date(Date.now() + 30 * 86_400_000),
+        deviceInfo: (userAgent || 'unknown').substring(0, 100),
+        ipAddress: ip,
+        revoked: false,
+        authVersion: user.authVersion ?? 0,
+      });
+      const accessToken = await this.jwt.signAsync({
+        userId: user._id,
+        type: 'access',
+        authVersion: user.authVersion ?? 0,
+      });
+      return {
+        user: toPublicUser(user),
+        token: accessToken,
+        refreshToken: newRefreshTokenValue,
+      };
     });
-
-    const accessToken = await this.jwt.signAsync({
-      userId: user._id,
-      type: 'access',
-    });
-    return {
-      user: toPublicUser(user),
-      token: accessToken,
-      refreshToken: newRefreshTokenValue,
-    };
+    if (!result) throw new UnauthorizedException('Invalid refresh');
+    return result;
   }
 
   async generateVerificationCode(userId: string) {
@@ -637,36 +673,31 @@ export class AuthService {
       );
     }
 
-    await this.userModel.findByIdAndUpdate(userId, {
-      isVerified: true,
-      verificationCode: null,
-      verificationCodeExpiry: null,
-    });
-
-    // Award 50 XP for verification
-    const VERIFICATION_XP = 50;
-    const userObjectId = new Types.ObjectId(userId);
-    try {
-      await this.xpTransactionModel.create({
-        userId: userObjectId,
-        amount: VERIFICATION_XP,
-        reason: 'Codeforces profile verification',
-        sourceType: 'verification',
-        sourceId: userObjectId,
-      });
-      await this.xpModel.findOneAndUpdate(
-        { userId: userObjectId },
-        { $inc: { totalXp: VERIFICATION_XP } },
-        { upsert: true },
+    const xpEarned = await this.xp.run(async () => {
+      const claimed = await this.userModel.updateOne(
+        {
+          _id: userId,
+          isVerified: false,
+          verificationCode: user.verificationCode,
+        },
+        {
+          $set: {
+            isVerified: true,
+            verificationCode: null,
+            verificationCodeExpiry: null,
+          },
+        },
       );
-    } catch {
-      // XP award is best-effort, don't fail verification if it errors
-    }
-
-    return {
-      message: 'Profile verified successfully',
-      xpEarned: VERIFICATION_XP,
-    };
+      if (!claimed.modifiedCount) return 0;
+      return this.xp.award(
+        userId,
+        50,
+        'Codeforces profile verification',
+        'verification',
+        new Types.ObjectId(userId),
+      );
+    });
+    return { message: 'Profile verified successfully', xpEarned };
   }
 
   async logout(refreshTokenValue: string) {

@@ -5,6 +5,8 @@ import { TrainingsService } from './trainings.service';
 import { Training } from './schemas/training.schema';
 import { User } from '../auth/schemas/user.schema';
 import { AuthService } from '../auth/auth.service';
+import { TransactionsService } from '../../common/database/transactions.module';
+import { UpsolveService } from '../upsolve/upsolve.service';
 import { UserStatsService } from '../user-stats/user-stats.service';
 
 const createModel = () => ({
@@ -36,6 +38,7 @@ describe('TrainingsService', () => {
   beforeEach(async () => {
     trainingModel = createModel();
     userModel = createModel();
+    userModel.findById.mockResolvedValue({ rating: 1500 });
     userStats = {
       recordTrainingCompleted: jest.fn().mockResolvedValue(undefined),
     };
@@ -44,6 +47,14 @@ describe('TrainingsService', () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         TrainingsService,
+        {
+          provide: TransactionsService,
+          useValue: { run: (work: () => Promise<unknown>) => work() },
+        },
+        {
+          provide: UpsolveService,
+          useValue: { insertMany: () => Promise.resolve(undefined) },
+        },
         { provide: getModelToken(User.name), useValue: userModel },
         { provide: getModelToken(Training.name), useValue: trainingModel },
         { provide: AuthService, useValue: authService },
@@ -94,6 +105,7 @@ describe('TrainingsService', () => {
       expect(trainingModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           ...body,
+          performance: 1500,
           problems: transformedProblems,
           user: VALID_ID,
           status: 'completed',

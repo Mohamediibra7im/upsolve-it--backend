@@ -418,10 +418,6 @@ export class RoadmapAdminService {
         (existing) => !revokeSet.has(String(existing)),
       ) ?? [];
 
-    if (level.allowedUserIds.length === 0) {
-      level.visibility = 'all';
-    }
-
     await level.save();
 
     if (audit) {
@@ -647,6 +643,8 @@ export class RoadmapAdminService {
     if (dto.url !== undefined) doc.url = dto.url;
     if (dto.weight !== undefined) doc.weight = dto.weight;
     if (dto.xpReward !== undefined) doc.xpReward = dto.xpReward;
+    if (dto.videoCompletionThresholdPct !== undefined)
+      doc.videoCompletionThresholdPct = dto.videoCompletionThresholdPct;
 
     await doc.save();
 

@@ -13,6 +13,11 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { UserDocument } from '../auth/schemas/user.schema';
 import { RoadmapPublicService } from './roadmap-public.service';
 import { RoadmapProgressService } from './roadmap-progress.service';
+import {
+  ResourceProgressDto,
+  ToggleProblemDto,
+  LanguageDto,
+} from './dto/progress.dto';
 import { AdminService } from '../admin/admin.service';
 
 @Controller('roadmap')
@@ -94,7 +99,7 @@ export class RoadmapPublicController {
   async updateResourceProgress(
     @Param('resourceId') resourceId: string,
     @Body()
-    body: { watchPct?: number; positionSec?: number; completed?: boolean },
+    body: ResourceProgressDto,
     @CurrentUser() user: UserDocument,
   ) {
     return await this.progress.recordResourceProgress(
@@ -108,7 +113,7 @@ export class RoadmapPublicController {
   @UseGuards(AuthGuard)
   async syncTopicProblems(
     @Param('topicId') topicId: string,
-    @Body() body: { language?: 'Arabic' | 'English' },
+    @Body() body: LanguageDto,
     @CurrentUser() user: UserDocument,
   ) {
     return await this.progress.syncTopicProblems(
@@ -122,7 +127,7 @@ export class RoadmapPublicController {
   @UseGuards(AuthGuard)
   async toggleProblem(
     @Param('problemId') problemId: string,
-    @Body() body: { solved: boolean; language?: 'Arabic' | 'English' },
+    @Body() body: ToggleProblemDto,
     @CurrentUser() user: UserDocument,
   ) {
     return await this.progress.toggleProblemSolved(
@@ -137,13 +142,13 @@ export class RoadmapPublicController {
   @UseGuards(AuthGuard)
   async completeLearning(
     @Param('topicId') topicId: string,
-    @Query('language') language: 'Arabic' | 'English' | undefined,
+    @Query() query: LanguageDto,
     @CurrentUser() user: UserDocument,
   ) {
     return await this.progress.completeLearning(
       user._id.toString(),
       topicId,
-      language,
+      query.language,
     );
   }
 
@@ -151,13 +156,13 @@ export class RoadmapPublicController {
   @UseGuards(AuthGuard)
   async resetTopicLearning(
     @Param('topicId') topicId: string,
-    @Query('language') language: 'Arabic' | 'English' | undefined,
+    @Query() query: LanguageDto,
     @CurrentUser() user: UserDocument,
   ) {
     return await this.progress.resetTopicLearningProgress(
       user._id.toString(),
       topicId,
-      language,
+      query.language,
     );
   }
 }

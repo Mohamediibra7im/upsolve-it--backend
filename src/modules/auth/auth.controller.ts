@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  GoneException,
   Post,
   Req,
   Res,
@@ -14,8 +15,8 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { InitiateResetDto } from './dto/initiate-reset.dto';
-import { VerifySubmissionDto } from './dto/verify-submission.dto';
-import { ResetPinDto } from './dto/reset-pin.dto';
+import { VerifyResetProfileDto } from './dto/verify-reset-profile.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -104,17 +105,24 @@ export class AuthController {
   }
 
   @Post('verify-submission')
-  async verifySubmission(@Body() dto: VerifySubmissionDto) {
-    return await this.auth.verifySubmission(dto.verificationToken);
+  verifySubmission() {
+    throw new GoneException(
+      'Restart password recovery and verify your Codeforces profile.',
+    );
   }
 
-  @Post('reset-pin')
+  @Post('verify-reset-profile')
+  async verifyResetProfile(@Body() dto: VerifyResetProfileDto) {
+    return await this.auth.verifyResetProfile(dto.verificationToken);
+  }
+
+  @Post('reset-password')
   @UseGuards(OptionalAuthGuard)
-  async resetPin(
+  async resetPassword(
     @CurrentUser() user: UserDocument | null,
-    @Body() dto: ResetPinDto,
+    @Body() dto: ResetPasswordDto,
   ) {
-    return await this.auth.resetPin(user?._id?.toString(), {
+    return await this.auth.resetPassword(user?._id?.toString(), {
       resetToken: dto.resetToken,
       newPassword: dto.newPassword,
       oldPassword: dto.oldPassword,

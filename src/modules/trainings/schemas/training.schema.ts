@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Types, SchemaTypes } from 'mongoose';
 
 export type TrainingDocument = HydratedDocument<Training>;
 
@@ -55,7 +55,7 @@ const ProblemShape = {
 
 @Schema({ timestamps: true })
 export class Training {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   user!: Types.ObjectId;
 
   @Prop({ required: true })

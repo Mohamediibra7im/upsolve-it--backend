@@ -12,7 +12,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { UserDocument } from '../auth/schemas/user.schema';
 import { TrainingsService } from './trainings.service';
 
-import { CreateTrainingDto } from './dto/create-training.dto';
+import { SaveTrainingDto } from './dto/save-training.dto';
 
 @UseGuards(AuthGuard)
 @Controller('trainings')
@@ -21,7 +21,7 @@ export class TrainingsController {
 
   @Post()
   async create(
-    @Body() body: CreateTrainingDto,
+    @Body() body: SaveTrainingDto,
     @CurrentUser() user: UserDocument,
   ) {
     const training = await this.trainings.createTraining(

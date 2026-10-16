@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Min, Max } from 'class-validator';
 
 export class CreateResourceDto {
   @IsString()
@@ -49,6 +49,7 @@ export class CreateResourceDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(100)
   videoCompletionThresholdPct?: number;
 
   @IsOptional()
