@@ -40,6 +40,7 @@ describe('ContactService reply history', () => {
       return { lean: () => Promise.resolve(stored) };
     });
     const contactModel = {
+      create: () => Promise.resolve(stored),
       findById: () => ({ lean: () => Promise.resolve(stored) }),
       findByIdAndUpdate: update,
     } as unknown as Model<ContactMessageDocument>;
@@ -47,6 +48,8 @@ describe('ContactService reply history', () => {
       new ConfigService({
         SMTP_EMAIL: 'support@example.com',
         SMTP_PASSWORD: 'test-password',
+        NOTIFICATION_EMAIL: 'admin@example.com',
+        APP_URL: 'https://community.example.com',
       }),
       contactModel,
     );
@@ -103,5 +106,39 @@ describe('ContactService reply history', () => {
 
   it('gives older contact messages an empty reply history', () => {
     expect(new MessageModel(stored).toObject()).toMatchObject({ replies: [] });
+  });
+
+  it('sends a readable HTML reply and a plain-text alternative without a duplicate greeting', async () => {
+    const body = 'Hi Support reader,\n\nThe tabs now work.\n\nSupport Team';
+    await service.sendReply(id, body);
+    const mail = sendMail.mock.calls[0][0];
+
+    expect(mail.text).toContain(body);
+    expect(mail.html).toContain('You have a reply.');
+    expect(mail.html).not.toContain('Hello <strong>Support reader');
+    expect(mail.html).toContain('href="https://community.example.com/"');
+  });
+
+  it('uses the new receipt and inbox designs for all contact notifications', async () => {
+    await service.sendContactEmail({
+      name: 'Support reader',
+      email: 'reader@example.com',
+      subject: 'Website issue',
+      message: 'Can you help?\nThe tabs will not open.',
+      category: 'technical',
+    });
+    const mails = sendMail.mock.calls.map(([mail]) => mail);
+
+    expect(mails.map((mail) => mail.to)).toEqual([
+      'support@example.com',
+      'reader@example.com',
+      'admin@example.com',
+    ]);
+    for (const mail of mails) expect(mail.text).toContain('Website issue');
+    expect(mails[1].html).toContain('Message received.');
+    expect(mails[0].html).toContain(
+      'href="https://community.example.com/admin/contact"',
+    );
+    expect(mails[2].html).toBe(mails[0].html);
   });
 });
