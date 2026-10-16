@@ -5,6 +5,7 @@ import nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
 import {
   ContactMessage,
+  type ContactReply,
   type ContactMessageDocument,
 } from './schemas/contact-message.schema';
 
@@ -192,7 +193,7 @@ export class ContactService {
     const escReplyMessage = esc(msg.message);
     const escReplyBody = esc(replyBody);
 
-    await transporter.sendMail({
+    const delivery = await transporter.sendMail({
       from: `"Upsolve.it Support" <${smtpEmail}>`,
       to: msg.email,
       subject: `Re: ${msg.subject}`,
@@ -214,7 +215,26 @@ export class ContactService {
       `,
     });
 
-    return { success: true };
+    const reply: ContactReply = {
+      message: replyBody,
+      sentAt: new Date(),
+      from: smtpEmail,
+      to: msg.email,
+      messageId: delivery.messageId,
+    };
+
+    try {
+      const saved = await this.contactModel
+        .findByIdAndUpdate(id, { $push: { replies: reply } }, { new: true })
+        .lean();
+      if (!saved) throw new Error('Message was removed while sending');
+    } catch {
+      throw new ServiceUnavailableException(
+        'Your reply was emailed, but its history could not be saved. Do not resend the reply.',
+      );
+    }
+
+    return { success: true, reply };
   }
 
   async deleteMessage(id: string) {
